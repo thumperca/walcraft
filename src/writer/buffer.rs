@@ -2,14 +2,14 @@ use super::PAGE_SIZE;
 
 pub(crate) struct Buffer {
     inner: [u8; PAGE_SIZE],
-    pointer: usize
+    pointer: usize,
 }
 
 impl Buffer {
     pub fn new() -> Self {
         Self {
             inner: [0; PAGE_SIZE],
-            pointer: 0
+            pointer: 0,
         }
     }
 
@@ -24,5 +24,9 @@ impl Buffer {
             self.pointer += 1;
         }
         true
+    }
+
+    pub fn inner(&self) -> &[u8] {
+        &self.inner
     }
 }
