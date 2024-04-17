@@ -14,10 +14,10 @@ pub(crate) struct Writer {
 }
 
 impl Writer {
-    pub fn new(location: &str) -> Self {
+    pub fn new(location: &str, size: Option<usize>) -> Self {
         Self {
             buffer: Mutex::new(Buffer::new()),
-            io: FileManager::new(location),
+            io: FileManager::new(location, size),
         }
     }
 
