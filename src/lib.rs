@@ -32,7 +32,7 @@ impl<T> WalInner<T>
 where
     T: Serialize + for<'a> Deserialize<'a>,
 {
-    pub fn new(location: &str, size: Option<usize>) -> Self {
+    pub fn new(location: &str, size: usize) -> Self {
         Self {
             mode: AtomicU8::new(MODE_IDLE),
             writer: Writer::new(location, size),
@@ -56,9 +56,13 @@ where
     /// Create a new instance of [Wal]
     /// # Arguments
     /// - location: Location where the files shall be stored
-    /// - size: Optional, maximum storage size taken by logs
+    /// - size: Optional, maximum storage size taken by logs in MBs
     pub fn new(location: &str, size: Option<u16>) -> Self {
-        todo!()
+        let size = size.map(|v| v as usize * 1024).unwrap_or(usize::MAX);
+        let inner = WalInner::new(location, size);
+        Self {
+            inner: Arc::new(inner),
+        }
     }
 
     /// Read last `num` amount of logs
@@ -77,7 +81,7 @@ where
     }
 
     /// Delete all the stored logs
-    pub fn clear(&self) {
+    pub fn purge(&self) {
         todo!()
     }
 }
