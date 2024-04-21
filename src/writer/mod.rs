@@ -10,28 +10,37 @@ pub const PAGE_SIZE: usize = 4096; // 4 KB
 
 pub(crate) struct Writer {
     buffer: Mutex<Buffer>,
-    io: FileManager,
+    io: Mutex<FileManager>,
 }
 
 impl Writer {
-    pub fn new(location: &str, size: Option<usize>) -> Self {
+    pub fn new(location: &str, size: usize) -> Self {
         Self {
             buffer: Mutex::new(Buffer::new()),
-            io: FileManager::new(location, size),
+            io: Mutex::new(FileManager::new(location, size)),
         }
     }
 
     pub fn log(&mut self, msg: &[u8]) {
+        // acquire lock on buffer
         let mut lock = self.buffer.lock().unwrap();
+        // add data to buffer
         if lock.add(msg) {
             return;
         }
+        // buffer not able to accept more data, due to being filled
+        // create a new buffer
         let mut new_buffer = Buffer::new();
         new_buffer.add(msg);
+        // swap the buffers
         let buffer = std::mem::replace(&mut *lock, new_buffer);
+        // drop lock
         drop(lock);
+
+        // acquire lock on io to add the buffer to file
         let data = buffer.inner();
-        self.io.commit(data);
+        let mut lock = self.io.lock().unwrap();
+        lock.commit(data);
     }
 }
 
@@ -42,7 +51,7 @@ mod tests {
     #[ignore]
     #[test]
     fn it_works() {
-        let mut writer = Writer::new("./tmp/");
+        let mut writer = Writer::new("./tmp/", usize::MAX);
         let data = String::from("This is sparta");
         let data = data.as_bytes();
         writer.log(data);
