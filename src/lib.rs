@@ -1,18 +1,54 @@
-// Wal > read
-// Wal > write > buffer > file
+//! A Write Ahead Log (WAL) solution for concurrent environments
+//!
+//! # How?
+//! This library gives high performance/throughput by using in-memory buffer and leveraging append-only logs.
+//! The logs are split across multiple files. The older files are deleted to preserve the capacity constraints.
+//!
+//! # Usage
+//! ```
+//! use serde::{Deserialize, Serialize};
+//! use walcraft::Wal;
+//!
+//! // Log to write
+//! #[derive(Serialize, Deserialize, Clone)]
+//! struct Log {
+//!     id: usize,
+//!     value: f64
+//! }
+//! let log = Log {id: 1, value: 5.6234};
+//!
+//! // initiate wal and add a log
+//! let wal = Wal::new("./tmp/", Some(500)); // 500MB of log capacity
+//! wal.write(log); // write a log
+//!
+//! // write a log in another thread
+//! let wal2 = wal.clone();
+//! std::thread::spawn(move || {
+//!     let log = Log{id: 2, value: 0.45};
+//!     wal2.write(log);
+//! });
+//!
+//! // keep writing logs in current thread
+//! let log = Log{id: 3, value: 123.59};
+//! wal.write(log);
+//!
+//! // Flush the logs to the disk manually
+//! // This happens automatically as well after some time. However, it's advised to
+//! // run this method before terminating the program to ensure that no logs are lost.
+//! wal.flush();
+//! ```
+//!
 
-// Wal -> Reader
-// Wal -> Writer
-// Wal -> Writer -> Buffer
-// Wal -> Writer -> FileManager
-// Wal -> Writer -> FileManager -> Queue[Buffer]
-// Wal -> Writer -> FileManager -> FileHandle
+pub(crate) mod writer;
 
-mod writer;
 use self::writer::Writer;
+use crate::iter::WalIterator;
 use serde::{Deserialize, Serialize};
+use std::fs::remove_dir_all;
 use std::marker::PhantomData;
-use std::sync::atomic::AtomicU8;
+use std::path::PathBuf;
+use std::sync::atomic::Ordering::Acquire;
+use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::sync::Arc;
 
 const MODE_IDLE: u8 = 0;
@@ -25,6 +61,7 @@ where
 {
     mode: AtomicU8,
     writer: Writer,
+    location: PathBuf,
     _phantom: PhantomData<T>,
 }
 
@@ -36,6 +73,7 @@ where
         Self {
             mode: AtomicU8::new(MODE_IDLE),
             writer: Writer::new(location, size),
+            location: PathBuf::from(location),
             _phantom: PhantomData,
         }
     }
@@ -77,11 +115,34 @@ where
 
     /// Write a new log
     pub fn write(&self, item: T) {
-        todo!()
+        // ensure write mode is either ON
+        // or enable it if it's not ON
+        let mode = self.inner.mode.load(Relaxed);
+        if mode != MODE_WRITE {
+            if let Err(d) = self
+                .inner
+                .mode
+                .compare_exchange(MODE_IDLE, MODE_WRITE, Acquire, Relaxed)
+            {
+                // check if another thread hasn't already set the value
+                if d != MODE_WRITE {
+                    return;
+                }
+            }
+        }
+        // write the data
+        if let Ok(d) = bincode::serialize(&item) {
+            self.inner.writer.log(&d);
+        }
     }
 
-    /// Delete all the stored logs
+    /// Sync the in-memory buffer with Disk IO
+    pub fn flush(&self) {
+        self.inner.writer.flush();
+    }
+
+    /// Delete all the stored logs... Use Carefully!
     pub fn purge(&self) {
-        todo!()
+        let _ = remove_dir_all(self.inner.location.as_path());
     }
 }

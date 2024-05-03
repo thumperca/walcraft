@@ -6,7 +6,7 @@ use std::path::PathBuf;
 const MAX_FILE_SIZE: usize = 2 * 1024 * 1024 * 1024; // 2 GB
 const NUM_FILES_SPLIT: usize = 4;
 
-struct Meta {
+pub(crate) struct Meta {
     location: PathBuf,
 }
 

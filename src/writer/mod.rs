@@ -1,5 +1,5 @@
 mod buffer;
-mod manager;
+pub(crate) mod manager;
 
 use self::buffer::Buffer;
 use self::manager::FileManager;
@@ -8,12 +8,18 @@ use std::sync::Mutex;
 
 pub const PAGE_SIZE: usize = 4096; // 4 KB
 
+/// Log Writer responsible for writing the information to the buffer as well as on disk
 pub(crate) struct Writer {
     buffer: Mutex<Buffer>,
     io: Mutex<FileManager>,
 }
 
 impl Writer {
+    /// Create a new Log Writer
+    ///
+    /// ## Arguments
+    /// - `location`: Location where the log files shall be stored
+    /// - `size`: Maximum amount of data that can be stored, in bytes
     pub fn new(location: &str, size: usize) -> Self {
         Self {
             buffer: Mutex::new(Buffer::new()),
@@ -21,26 +27,52 @@ impl Writer {
         }
     }
 
-    pub fn log(&mut self, msg: &[u8]) {
+    /// Add a new log
+    ///
+    /// This method will either write the log to the buffer or a file
+    ///
+    /// ## Arguments
+    /// - `msg`: The log data to be written
+    ///
+    pub fn log(&self, msg: &[u8]) {
         // acquire lock on buffer
         let mut lock = self.buffer.lock().unwrap();
         // add data to buffer
-        if lock.add(msg) {
+        let (added, flush) = lock.try_add(msg);
+        if added && !flush {
             return;
         }
         // buffer not able to accept more data, due to being filled
         // create a new buffer
         let mut new_buffer = Buffer::new();
-        new_buffer.add(msg);
+        if !added {
+            new_buffer.try_add(msg);
+        }
         // swap the buffers
         let buffer = std::mem::replace(&mut *lock, new_buffer);
         // drop lock
         drop(lock);
 
         // acquire lock on io to add the buffer to file
-        let data = buffer.inner();
-        let mut lock = self.io.lock().unwrap();
-        lock.commit(data);
+        if flush {
+            let data = buffer.consume(true);
+            let mut lock = self.io.lock().unwrap();
+            lock.commit(&data);
+        }
+    }
+
+    /// Flush the in-memory buffer to Disk, if any data exists in the buffer
+    pub fn flush(&self) {
+        // get buffer
+        let mut lock = self.buffer.lock().unwrap();
+        let buffer = std::mem::replace(&mut *lock, Buffer::new());
+        drop(lock);
+        // acquire lock on io to add the buffer to file
+        let data = buffer.consume(false);
+        if !data.is_empty() {
+            let mut lock = self.io.lock().unwrap();
+            lock.commit(&data);
+        }
     }
 }
 
@@ -48,7 +80,6 @@ impl Writer {
 mod tests {
     use super::*;
 
-    #[ignore]
     #[test]
     fn it_works() {
         let mut writer = Writer::new("./tmp/", usize::MAX);
