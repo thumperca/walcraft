@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-const MAX_FILE_SIZE: usize = 2 * 1024 * 1024 * 1024; // 2 GB
+const MAX_FILE_SIZE: usize = 10 * 1024 * 1024 * 1024; // 10 GB
 const NUM_FILES_SPLIT: usize = 4;
 
 pub(crate) struct Meta {
@@ -79,6 +79,7 @@ impl FileConfig {
         } else {
             size / capacity + 2
         };
+        // sync with disk
         conf
     }
 }
@@ -99,6 +100,7 @@ impl FileManager {
             config.gc_pointer = data.0;
             config.current_pointer = data.1;
         }
+        meta.write((config.gc_pointer, config.current_pointer));
 
         let current_file = format!("log_{}.bin", config.current_pointer);
         let mut file_path = location.clone();
@@ -157,8 +159,6 @@ impl FileManager {
             diff = current - gc_pointer;
         } else if gc_pointer > current {
             diff = usize::MAX - (gc_pointer - current) + 1;
-        } else {
-            unreachable!()
         }
         // no GC needed
         if diff <= self.config.max_files {
@@ -225,7 +225,7 @@ mod tests {
         // write to manager to test that the GC ran
         let mut manager = FileManager::new("./tmp/testing", PAGE_SIZE * NUM_FILES_SPLIT); // 1MB
         assert_eq!(manager.config.max_files, 5);
-        for i in 0..2 {
+        for _ in 0..2 {
             let data = [101; PAGE_SIZE];
             manager.commit(&data);
         }
@@ -265,7 +265,7 @@ mod tests {
         // write to manager to test that the GC ran
         let mut manager = FileManager::new("./tmp/testing", PAGE_SIZE * NUM_FILES_SPLIT);
         assert_eq!(manager.config.max_files, 5);
-        for i in 0..2 {
+        for _ in 0..2 {
             let data = [101; PAGE_SIZE];
             manager.commit(&data);
         }

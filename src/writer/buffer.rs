@@ -29,7 +29,7 @@ impl Buffer {
     /// ## Returns
     /// A new empty buffer of provided size
     ///
-    pub fn with_size(size: usize) -> Self {
+    pub fn with_size(_size: usize) -> Self {
         todo!()
     }
 
@@ -49,12 +49,15 @@ impl Buffer {
         if self.inner.len() >= PAGE_SIZE {
             return (false, true);
         }
+
+        // Note: uncomment the code below to ensure alignment of buffer to PAGE_SIZE
         // check if the data shall be accepted or not
         // It can be rejected if there isn't enough space for small payloads
-        let new_pointer = self.inner.len() + data.len() + 2;
-        if data.len() < (PAGE_SIZE / 4) && new_pointer > PAGE_SIZE {
-            return (false, true);
-        }
+        // let new_pointer = self.inner.len() + data.len() + 2;
+        // if data.len() < (PAGE_SIZE / 4) && new_pointer > PAGE_SIZE {
+        //     return (false, true);
+        // }
+
         // add to buffer & return accepted status
         self.add(data);
         (true, self.inner.len() >= PAGE_SIZE)
@@ -65,7 +68,7 @@ impl Buffer {
     /// If enough space is not available, then this method will extend the size of the buffer beyond [PAGE_SIZE]
     fn add(&mut self, data: &[u8]) {
         // store length
-        let size: [u8; 2] = (self.inner.len() as u16).to_ne_bytes();
+        let size: [u8; 2] = (data.len() as u16).to_ne_bytes();
         self.inner.extend(&size);
         // store data
         self.inner.extend(data);
