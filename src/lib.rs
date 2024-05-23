@@ -39,6 +39,7 @@
 //! ```
 //!
 
+mod iter;
 pub(crate) mod writer;
 
 use self::writer::Writer;
@@ -103,9 +104,20 @@ where
         }
     }
 
-    /// Read last `num` amount of logs
-    pub fn read(&self, num: usize) -> Vec<T> {
-        todo!()
+    /// Read the logs
+    pub fn iter(&self) -> Option<WalIterator<T>> {
+        if let Err(_) = self
+            .inner
+            .mode
+            .compare_exchange(MODE_IDLE, MODE_READ, Relaxed, Relaxed)
+        {
+            return None;
+        }
+        let wal = Wal {
+            inner: self.inner.clone(),
+        };
+        let t = WalIterator::new(wal);
+        Some(t)
     }
 
     /// Read all stored logs
@@ -144,5 +156,57 @@ where
     /// Delete all the stored logs... Use Carefully!
     pub fn purge(&self) {
         let _ = remove_dir_all(self.inner.location.as_path());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Serialize, Deserialize, Clone)]
+    struct Log {
+        id: usize,
+        name: String,
+    }
+
+    #[test]
+    fn read_after_write() {
+        // reset the folder
+        let location = "./tmp/testing";
+        let _ = std::fs::remove_dir_all(location);
+        std::fs::create_dir(location).unwrap();
+        // create a wal instance
+        let wal = Wal::new(location, Some(100));
+        // add 2 logs
+        wal.write(Log {
+            id: 420,
+            name: "Jane Doe".to_string(),
+        });
+        wal.write(Log {
+            id: 840,
+            name: "John Doe".to_string(),
+        });
+        // ensure data is written to disk
+        wal.flush();
+        drop(wal);
+        // read it
+        let wal: Wal<Log> = Wal::new(location, Some(100));
+        let logs = wal.iter();
+        assert!(logs.is_some());
+        let mut logs = logs.unwrap();
+        // check item 1
+        let item = logs.next();
+        assert!(item.is_some());
+        let item = item.unwrap();
+        assert_eq!(item.id, 420);
+        assert_eq!(&item.name, "Jane Doe");
+        // check item 2
+        let item = logs.next();
+        assert!(item.is_some());
+        let item = item.unwrap();
+        assert_eq!(item.id, 840);
+        assert_eq!(&item.name, "John Doe");
+        // no item 3
+        assert!(logs.next().is_none());
     }
 }
