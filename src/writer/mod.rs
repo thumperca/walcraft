@@ -3,7 +3,6 @@ pub(crate) mod manager;
 
 use self::buffer::Buffer;
 use self::manager::FileManager;
-use std::ops::{Deref, DerefMut};
 use std::sync::Mutex;
 
 pub const PAGE_SIZE: usize = 4096; // 4 KB
@@ -82,7 +81,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let mut writer = Writer::new("./tmp/", usize::MAX);
+        let writer = Writer::new("./tmp/", usize::MAX);
         let data = String::from("This is sparta");
         let data = data.as_bytes();
         writer.log(data);
