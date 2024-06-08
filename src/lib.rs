@@ -97,7 +97,7 @@ where
     /// - location: Location where the files shall be stored
     /// - size: Optional, maximum storage size taken by logs in MBs
     pub fn new(location: &str, size: Option<u16>) -> Self {
-        let size = size.map(|v| v as usize * 1024).unwrap_or(usize::MAX);
+        let size = size.map(|v| v as usize * 1024 * 1024).unwrap_or(usize::MAX);
         let inner = WalInner::new(location, size);
         Self {
             inner: Arc::new(inner),
