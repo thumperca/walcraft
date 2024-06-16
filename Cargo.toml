@@ -1,7 +1,14 @@
 [package]
 name = "walcraft"
+description = "A lightwight Write Ahead Log (WAL) solution with garbage collection on older logs"
 version = "0.1.0"
 edition = "2021"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+homepage = "https://github.com/thumperca/walcraft"
+repository = "https://github.com/thumperca/walcraft"
+keywords = ["wal", "write-ahead-log"]
+categories = ["filesystem"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
