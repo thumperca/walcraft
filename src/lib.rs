@@ -1,43 +1,40 @@
 //! A Write Ahead Log (WAL) solution for concurrent environments
 //!
 //! # How?
-//! This library gives high performance/throughput by using in-memory buffer and leveraging append-only logs.
-//! The logs are split across multiple files. The older files are deleted to preserve the capacity constraints.
+//! This library provides high performance by using an in-memory buffer and append-only logs.
+//! The logs are stored in multiple files, and older files are deleted to save space.
 //!
-//! # Usage
-//! ```
+//!  # Usage
+//!
+//! ```no_run
 //! use serde::{Deserialize, Serialize};
 //! use walcraft::Wal;
 //!
 //! // Log to write
-//! #[derive(Serialize, Deserialize, Clone)]
+//! #[derive(Serialize, Deserialize, Debug)]
 //! struct Log {
 //!     id: usize,
 //!     value: f64
 //! }
-//! let log = Log {id: 1, value: 5.6234};
 //!
-//! // initiate wal and add a log
-//! let wal = Wal::new("./tmp/", Some(500)); // 500MB of log capacity
-//! wal.write(log); // write a log
+//! // create an instance of WAL
+//! let wal = Wal::new("/tmp/logz", Some(2000));
 //!
-//! // write a log in another thread
-//! let wal2 = wal.clone();
-//! std::thread::spawn(move || {
-//!     let log = Log{id: 2, value: 0.45};
-//!     wal2.write(log);
-//! });
+//! // recovery: Option A
+//! let all_logs = wal.read().unwrap().into_iter().collect::<Vec<Log> > ();
+//! // recovery: Option B
+//! for log in wal.read().unwrap() {
+//!   // do something with logs
+//!   dbg!(log);
+//! }
 //!
-//! // keep writing logs in current thread
-//! let log = Log{id: 3, value: 123.59};
-//! wal.write(log);
+//! // start writing
+//! wal.write(Log{id: 1, value: 3.14});
+//! wal.write(Log{id: 2, value: 4.20});
 //!
-//! // Flush the logs to the disk manually
-//! // This happens automatically as well after some time. However, it's advised to
-//! // run this method before terminating the program to ensure that no logs are lost.
+//! // Flush to disk early/manually, before the buffer is filled
 //! wal.flush();
-//! ```
-//!
+//!```
 
 mod iter;
 pub(crate) mod writer;
@@ -48,6 +45,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::remove_dir_all;
 use std::marker::PhantomData;
 use std::path::PathBuf;
+use std::process::Output;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::sync::Arc;
@@ -105,24 +103,19 @@ where
     }
 
     /// Read the logs
-    pub fn iter(&self) -> Option<WalIterator<T>> {
+    pub fn read(&self) -> Result<impl Iterator<Item = T>, String> {
         if let Err(_) = self
             .inner
             .mode
             .compare_exchange(MODE_IDLE, MODE_READ, Relaxed, Relaxed)
         {
-            return None;
+            return Err("Unable to acquire read lock on WAL".to_string());
         }
         let wal = Wal {
             inner: self.inner.clone(),
         };
         let t = WalIterator::new(wal);
-        Some(t)
-    }
-
-    /// Read all stored logs
-    pub fn read_all(&self) -> Vec<T> {
-        todo!()
+        Ok(t)
     }
 
     /// Write a new log
@@ -138,7 +131,7 @@ where
             {
                 // check if another thread hasn't already set the value
                 if d != MODE_WRITE {
-                    return;
+                    panic!("Writing logs while reading data is forbidden");
                 }
             }
         }
@@ -169,14 +162,19 @@ mod tests {
         name: String,
     }
 
+    const LOCATION: &str = "./tmp/testing";
+
+    // reset the folder
+    fn reset() {
+        let _ = std::fs::remove_dir_all(LOCATION);
+        std::fs::create_dir(LOCATION).unwrap();
+    }
+
     #[test]
     fn read_after_write() {
-        // reset the folder
-        let location = "./tmp/testing";
-        let _ = std::fs::remove_dir_all(location);
-        std::fs::create_dir(location).unwrap();
+        reset();
         // create a wal instance
-        let wal = Wal::new(location, Some(100));
+        let wal = Wal::new(LOCATION, Some(100));
         // add 2 logs
         wal.write(Log {
             id: 420,
@@ -190,9 +188,9 @@ mod tests {
         wal.flush();
         drop(wal);
         // read it
-        let wal: Wal<Log> = Wal::new(location, Some(100));
-        let logs = wal.iter();
-        assert!(logs.is_some());
+        let wal: Wal<Log> = Wal::new(LOCATION, Some(100));
+        let logs = wal.read();
+        assert!(logs.is_ok());
         let mut logs = logs.unwrap();
         // check item 1
         let item = logs.next();
@@ -208,5 +206,39 @@ mod tests {
         assert_eq!(&item.name, "John Doe");
         // no item 3
         assert!(logs.next().is_none());
+    }
+
+    #[test]
+    fn write_after_read() {
+        reset();
+        // add some data
+        let wal = Wal::new(LOCATION, Some(500));
+        for i in 0..20 {
+            wal.write(Log {
+                id: i + 1,
+                name: "".to_string(),
+            })
+        }
+        wal.flush();
+        drop(wal);
+        // read data
+        let wal = Wal::new(LOCATION, Some(500));
+        let data = wal.read().unwrap().into_iter().collect::<Vec<Log>>();
+        assert_eq!(data.len(), 20);
+        // write more data
+        for i in 20..25 {
+            wal.write(Log {
+                id: i + 1,
+                name: "".to_string(),
+            })
+        }
+        wal.flush();
+        drop(wal);
+        // read to ensure everything new is also there
+        let wal = Wal::new(LOCATION, Some(500));
+        let data = wal.read().unwrap().into_iter().collect::<Vec<Log>>();
+        assert_eq!(data.len(), 25);
+        assert_eq!(data.first().unwrap().id, 1);
+        assert_eq!(data.last().unwrap().id, 25);
     }
 }
