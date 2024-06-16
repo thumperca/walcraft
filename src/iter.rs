@@ -1,12 +1,14 @@
 use crate::writer::manager::Meta;
-use crate::Wal;
+use crate::{Wal, MODE_IDLE};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::Read;
+use std::sync::atomic::Ordering::Relaxed;
 
-const BUFFER_SIZE: usize = 1024 * 8; // 8 KB
+const BUFFER_SIZE: usize = 1024 * 1024 * 16; // 16 MB
 
+/// Iterator to read data from WAL
 pub struct WalIterator<T>
 where
     T: Serialize + for<'a> Deserialize<'a>,
@@ -119,7 +121,7 @@ where
             // this will read from the same file, if there's more data in the file
             // otherwise it will try to open next file and read from it
             let file = self.file.as_mut().unwrap();
-            let mut data = vec![0; 50];
+            let mut data = vec![0; BUFFER_SIZE];
             let bytes_read = file.read(&mut data).unwrap_or(0);
             if bytes_read == 0 {
                 if self.next_file().is_none() {
@@ -127,7 +129,6 @@ where
                 }
             } else {
                 self.buffer.extend(data);
-                return true;
             }
         }
     }
@@ -162,9 +163,59 @@ where
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.get_next()
+        let out = self.get_next();
+        if out.is_none() {
+            self.wal.inner.mode.store(MODE_IDLE, Relaxed);
+        }
+        out
+    }
+}
+
+impl<T> Drop for WalIterator<T>
+where
+    T: Serialize + for<'a> Deserialize<'a>,
+{
+    fn drop(&mut self) {
+        self.wal.inner.mode.store(MODE_IDLE, Relaxed);
     }
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use crate::Wal;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize, Debug)]
+    struct Log {
+        id: usize,
+        text: String,
+    }
+
+    const TEXT: &str = "Voluptatem mollitia quia ab soluta. Molestias quia similique molestias occaecati eius ut rerum ad. Eveniet est consequatur numquam qui laborum ratione ex soluta. In quam sit aut. Est sunt minus alias adipisci incidunt ullam architecto ea. Quae unde eos officiis ut.";
+
+    #[test]
+    fn test_iterator() {
+        // reset the folder
+        let location = "./tmp/testing";
+        let _ = std::fs::remove_dir_all(location);
+        std::fs::create_dir(location).unwrap();
+        // write a lot of data
+        let wal = Wal::new(location, Some(40));
+        for i in 1..=100000 {
+            wal.write(Log {
+                id: i,
+                text: String::from(TEXT),
+            });
+        }
+        wal.flush();
+        drop(wal);
+        // read the logs to ensure that everything is there
+        let wal: Wal<Log> = Wal::new(location, Some(40));
+        let mut iterator = wal.read().unwrap();
+        let mut counter = 0;
+        for i in iterator {
+            counter += 1;
+        }
+        assert_eq!(counter, 100000);
+    }
+}
