@@ -6,11 +6,11 @@ use serde::{Deserialize, Serialize};
 ///
 /// ### Example
 /// ```no_run
-/// use walcraft::{Size, WalBuilder};
+/// use walcraft::{Size, WalBuilder, Wal};
 /// // create a wal with 4 KB buffer and 10 GB storage
-/// let wal = WalBuilder::new().buffer_size(Size::Kb(4)).storage_size(Size::Gb(10)).build();
+/// let wal: Wal<String> = WalBuilder::new().buffer_size(Size::Kb(4)).storage_size(Size::Gb(10)).build();
 /// // crate a wal with no buffer and 250 MB storage
-/// let wal = WalBuilder::new().storage_size(Size::Mb(250)).disable_buffer().build();
+/// let wal: Wal<String> = WalBuilder::new().storage_size(Size::Mb(250)).disable_buffer().build();
 /// ```
 pub struct WalBuilder {
     buffer_enabled: bool,
