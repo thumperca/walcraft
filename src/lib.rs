@@ -36,16 +36,17 @@
 //! wal.flush();
 //!```
 
+mod builder;
 mod iter;
-pub(crate) mod writer;
 
+pub use self::builder::WalBuilder;
+pub(crate) mod writer;
 use self::writer::Writer;
 use crate::iter::WalIterator;
 use serde::{Deserialize, Serialize};
 use std::fs::remove_dir_all;
 use std::marker::PhantomData;
 use std::path::PathBuf;
-use std::process::Output;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::sync::Arc;
@@ -53,6 +54,16 @@ use std::sync::Arc;
 const MODE_IDLE: u8 = 0;
 const MODE_READ: u8 = 1;
 const MODE_WRITE: u8 = 2;
+
+/// Represents size of data on KBs, MBs or GBs, such as:
+/// - `Size::Kb(8)` means 8 KB
+/// - `Size::Mb(16)` means 16 MB
+/// - `Size::Gb(2)` means 2 GB
+pub enum Size {
+    Kb(usize),
+    Mb(usize),
+    Gb(usize),
+}
 
 struct WalInner<T>
 where
