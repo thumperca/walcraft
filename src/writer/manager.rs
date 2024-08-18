@@ -1,10 +1,12 @@
-use crate::writer::PAGE_SIZE;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
 const MAX_FILE_SIZE: usize = 10 * 1024 * 1024 * 1024; // 10 GB
 const NUM_FILES_SPLIT: usize = 4;
+
+// Todo: delete me
+const PAGE_SIZE: usize = 4096;
 
 pub(crate) struct Meta {
     location: PathBuf,

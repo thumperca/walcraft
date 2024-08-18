@@ -3,15 +3,14 @@ pub(crate) mod manager;
 
 use self::buffer::Buffer;
 use self::manager::FileManager;
-use std::path::PathBuf;
+use crate::WalConfig;
 use std::sync::Mutex;
-
-pub const PAGE_SIZE: usize = 4096; // 4 KB
 
 /// Log Writer responsible for writing the information to the buffer as well as on disk
 pub(crate) struct Writer {
     buffer: Mutex<Buffer>,
     io: Mutex<FileManager>,
+    config: WalConfig,
 }
 
 impl Writer {
@@ -20,10 +19,11 @@ impl Writer {
     /// ## Arguments
     /// - `location`: Location where the log files shall be stored
     /// - `size`: Maximum amount of data that can be stored, in bytes
-    pub fn new(location: PathBuf, size: usize) -> Self {
+    pub fn new(config: WalConfig) -> Self {
         Self {
-            buffer: Mutex::new(Buffer::new()),
-            io: Mutex::new(FileManager::new(location, size)),
+            buffer: Mutex::new(Buffer::new(Some(config.buffer_size))),
+            io: Mutex::new(FileManager::new(config.location.clone(), config.size)),
+            config,
         }
     }
 
@@ -44,7 +44,7 @@ impl Writer {
         }
         // buffer not able to accept more data, due to being filled
         // create a new buffer
-        let mut new_buffer = Buffer::new();
+        let mut new_buffer = Buffer::new(None);
         if !added {
             new_buffer.try_add(msg);
         }
@@ -65,7 +65,7 @@ impl Writer {
     pub fn flush(&self) {
         // get buffer
         let mut lock = self.buffer.lock().unwrap();
-        let buffer = std::mem::replace(&mut *lock, Buffer::new());
+        let buffer = std::mem::replace(&mut *lock, Buffer::new(None));
         drop(lock);
         // acquire lock on io to add the buffer to file
         let data = buffer.consume(false);
@@ -82,7 +82,9 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let writer = Writer::new("./tmp/".into(), usize::MAX);
+        let mut config = WalConfig::default();
+        config.location = "./tmp/".into();
+        let writer = Writer::new(config);
         let data = String::from("This is sparta");
         let data = data.as_bytes();
         writer.log(data);

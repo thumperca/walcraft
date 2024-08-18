@@ -50,6 +50,8 @@ const MODE_IDLE: u8 = 0;
 const MODE_READ: u8 = 1;
 const MODE_WRITE: u8 = 2;
 
+pub const DEFAULT_BUFFER_SIZE: usize = 4096; // 4 KB
+
 /// Represents size of data on KBs, MBs or GBs, such as:
 /// - `Size::Kb(8)` means 8 KB
 /// - `Size::Mb(16)` means 16 MB
@@ -61,17 +63,17 @@ pub enum Size {
 }
 
 impl Size {
-    pub fn to_kb(&self) -> usize {
+    pub fn to_bytes(&self) -> usize {
         match self {
-            Size::Kb(kb) => *kb,
-            Size::Mb(mb) => *mb * 1024,
-            Size::Gb(gb) => *gb * 1024 * 1024,
+            Size::Kb(kb) => *kb * 1024,
+            Size::Mb(mb) => *mb * 1024 * 1024,
+            Size::Gb(gb) => *gb * 1024 * 1024 * 1024,
         }
     }
 }
 
 /// A Data object that holds configuration for [Wal]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct WalConfig {
     // location on directory where files shall be store
     location: PathBuf,
@@ -81,4 +83,15 @@ struct WalConfig {
     fsync: bool,
     // a value of zero means buffer is disabled
     buffer_size: usize,
+}
+
+impl Default for WalConfig {
+    fn default() -> Self {
+        Self {
+            location: Default::default(),
+            size: usize::MAX,
+            fsync: false,
+            buffer_size: DEFAULT_BUFFER_SIZE,
+        }
+    }
 }

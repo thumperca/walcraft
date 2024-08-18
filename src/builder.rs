@@ -72,7 +72,7 @@ impl WalBuilder {
         T: Serialize + for<'a> Deserialize<'a>,
     {
         // validate location
-        let mut location = match self.location {
+        let location = match self.location {
             None => {
                 return Err("Location field is required".to_string());
             }
@@ -85,15 +85,15 @@ impl WalBuilder {
         }
         // buffer size in KBs
         let buffer_size = match self.buffer_enabled {
-            true => self.buffer_size.map(|size| size.to_kb()).unwrap_or(0),
+            true => self.buffer_size.map(|size| size.to_bytes()).unwrap_or(0),
             false => 0,
         };
         // create Wal
-        let mut config = WalConfig {
+        let config = WalConfig {
             location,
             size: self
                 .storage_size
-                .map(|size| size.to_kb())
+                .map(|size| size.to_bytes())
                 .unwrap_or(usize::MAX),
             fsync: self.fsync,
             buffer_size,

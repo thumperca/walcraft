@@ -37,7 +37,7 @@
 //!```
 use crate::iter::WalIterator;
 use crate::writer::Writer;
-use crate::WalConfig;
+use crate::{WalConfig, DEFAULT_BUFFER_SIZE};
 use serde::{Deserialize, Serialize};
 use std::fs::remove_dir_all;
 use std::marker::PhantomData;
@@ -76,7 +76,7 @@ where
 {
     pub fn new(config: WalConfig) -> Self {
         Self {
-            writer: Writer::new(config.location.clone(), config.size),
+            writer: Writer::new(config.clone()),
             mode: AtomicU8::new(MODE_IDLE),
             config,
             _phantom: PhantomData,
@@ -105,7 +105,7 @@ where
         let config = WalConfig {
             location: PathBuf::from(location),
             fsync: false,
-            buffer_size: 4096, // 4 KB
+            buffer_size: DEFAULT_BUFFER_SIZE,
             size,
         };
         let inner = WalInner::new(config);
