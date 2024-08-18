@@ -92,8 +92,7 @@ pub(crate) struct FileManager {
 }
 
 impl FileManager {
-    pub fn new(path: &str, size: usize) -> Self {
-        let location = PathBuf::from(path);
+    pub fn new(location: PathBuf, size: usize) -> Self {
         let mut config = FileConfig::new(size);
         let meta = Meta::new(location.clone());
         if let Some(data) = meta.read() {
@@ -223,7 +222,7 @@ mod tests {
         meta.write((0, 9));
 
         // write to manager to test that the GC ran
-        let mut manager = FileManager::new("./tmp/testing", PAGE_SIZE * NUM_FILES_SPLIT); // 1MB
+        let mut manager = FileManager::new("./tmp/testing".into(), PAGE_SIZE * NUM_FILES_SPLIT); // 1MB
         assert_eq!(manager.config.max_files, 5);
         for _ in 0..2 {
             let data = [101; PAGE_SIZE];
@@ -263,7 +262,7 @@ mod tests {
         meta.write((usize::MAX - 9, 1));
 
         // write to manager to test that the GC ran
-        let mut manager = FileManager::new("./tmp/testing", PAGE_SIZE * NUM_FILES_SPLIT);
+        let mut manager = FileManager::new("./tmp/testing".into(), PAGE_SIZE * NUM_FILES_SPLIT);
         assert_eq!(manager.config.max_files, 5);
         for _ in 0..2 {
             let data = [101; PAGE_SIZE];

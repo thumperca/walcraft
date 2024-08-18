@@ -3,6 +3,7 @@ pub(crate) mod manager;
 
 use self::buffer::Buffer;
 use self::manager::FileManager;
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 pub const PAGE_SIZE: usize = 4096; // 4 KB
@@ -19,7 +20,7 @@ impl Writer {
     /// ## Arguments
     /// - `location`: Location where the log files shall be stored
     /// - `size`: Maximum amount of data that can be stored, in bytes
-    pub fn new(location: &str, size: usize) -> Self {
+    pub fn new(location: PathBuf, size: usize) -> Self {
         Self {
             buffer: Mutex::new(Buffer::new()),
             io: Mutex::new(FileManager::new(location, size)),
@@ -81,7 +82,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let writer = Writer::new("./tmp/", usize::MAX);
+        let writer = Writer::new("./tmp/".into(), usize::MAX);
         let data = String::from("This is sparta");
         let data = data.as_bytes();
         writer.log(data);

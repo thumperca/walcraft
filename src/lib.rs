@@ -43,6 +43,8 @@ pub(crate) mod writer;
 
 pub use self::builder::WalBuilder;
 pub use self::wal::Wal;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 const MODE_IDLE: u8 = 0;
 const MODE_READ: u8 = 1;
@@ -56,4 +58,27 @@ pub enum Size {
     Kb(usize),
     Mb(usize),
     Gb(usize),
+}
+
+impl Size {
+    pub fn to_kb(&self) -> usize {
+        match self {
+            Size::Kb(kb) => *kb,
+            Size::Mb(mb) => *mb * 1024,
+            Size::Gb(gb) => *gb * 1024 * 1024,
+        }
+    }
+}
+
+/// A Data object that holds configuration for [Wal]
+#[derive(Serialize, Deserialize)]
+struct WalConfig {
+    // location on directory where files shall be store
+    location: PathBuf,
+    // maximum storage size to be taken in KBs
+    size: usize,
+    // sync is on or off
+    fsync: bool,
+    // a value of zero means buffer is disabled
+    buffer_size: usize,
 }

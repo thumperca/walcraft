@@ -37,6 +37,7 @@
 //!```
 use crate::iter::WalIterator;
 use crate::writer::Writer;
+use crate::WalConfig;
 use serde::{Deserialize, Serialize};
 use std::fs::remove_dir_all;
 use std::marker::PhantomData;
@@ -63,9 +64,9 @@ pub(crate) struct WalInner<T>
 where
     T: Serialize + for<'a> Deserialize<'a>,
 {
+    pub config: WalConfig,
     pub mode: AtomicU8,
     pub writer: Writer,
-    pub location: PathBuf,
     _phantom: PhantomData<T>,
 }
 
@@ -73,11 +74,11 @@ impl<T> WalInner<T>
 where
     T: Serialize + for<'a> Deserialize<'a>,
 {
-    pub fn new(location: &str, size: usize) -> Self {
+    pub fn new(config: WalConfig) -> Self {
         Self {
+            writer: Writer::new(config.location.clone(), config.size),
             mode: AtomicU8::new(MODE_IDLE),
-            writer: Writer::new(location, size),
-            location: PathBuf::from(location),
+            config,
             _phantom: PhantomData,
         }
     }
@@ -101,10 +102,21 @@ where
     /// - size: Optional, maximum storage size taken by logs in MBs
     pub fn new(location: &str, size: Option<u16>) -> Self {
         let size = size.map(|v| v as usize * 1024 * 1024).unwrap_or(usize::MAX);
-        let inner = WalInner::new(location, size);
+        let config = WalConfig {
+            location: PathBuf::from(location),
+            fsync: false,
+            buffer_size: 4096, // 4 KB
+            size,
+        };
+        let inner = WalInner::new(config);
         Self {
             inner: Arc::new(inner),
         }
+    }
+
+    pub fn with_config(config: WalConfig) -> Self {
+        let inner = Arc::new(WalInner::new(config));
+        Self { inner }
     }
 
     /// Read the logs
@@ -153,7 +165,7 @@ where
 
     /// Delete all the stored logs... Use Carefully!
     pub fn purge(&self) {
-        let _ = remove_dir_all(self.inner.location.as_path());
+        let _ = remove_dir_all(self.inner.config.location.as_path());
     }
 }
 

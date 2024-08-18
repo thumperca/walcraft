@@ -46,7 +46,7 @@ where
     }
 
     fn init(&mut self) {
-        match Meta::new(self.wal.inner.location.clone()).read() {
+        match Meta::new(self.wal.inner.config.location.clone()).read() {
             None => {
                 self.ended = true;
             }
@@ -142,7 +142,7 @@ where
                 }
                 Some(f) => {
                     let file_name = format!("log_{}.bin", f);
-                    let mut path = self.wal.inner.location.clone();
+                    let mut path = self.wal.inner.config.location.clone();
                     path.push(&file_name);
                     let file = match File::open(path) {
                         Ok(f) => f,
