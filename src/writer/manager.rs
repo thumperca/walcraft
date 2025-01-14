@@ -1,3 +1,4 @@
+use crate::WalConfig;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
@@ -54,6 +55,8 @@ struct FileConfig {
     /// Pointer to garbage collector
     /// This will always be 0 if there are no size restrictions on WAL
     gc_pointer: usize,
+    /// Whether file sync is enabled or not
+    sync: bool,
 }
 
 impl Default for FileConfig {
@@ -63,6 +66,7 @@ impl Default for FileConfig {
             size_per_file: MAX_FILE_SIZE,
             current_pointer: 0,
             gc_pointer: 0,
+            sync: false,
         }
     }
 }
@@ -99,32 +103,38 @@ pub(crate) struct FileManager {
 }
 
 impl FileManager {
-    pub fn new(location: PathBuf, size: usize) -> Self {
-        let mut config = FileConfig::new(size);
-        let meta = Meta::new(location.clone());
+    pub fn new(config: WalConfig) -> Self {
+        let mut file_config = FileConfig::new(config.size);
+        file_config.sync = config.fsync;
+        let meta = Meta::new(config.location.clone());
         if let Some(data) = meta.read() {
-            config.gc_pointer = data.0;
-            config.current_pointer = data.1;
+            file_config.gc_pointer = data.0;
+            file_config.current_pointer = data.1;
         }
-        meta.write((config.gc_pointer, config.current_pointer));
+        meta.write((file_config.gc_pointer, file_config.current_pointer));
 
-        let current_file = format!("log_{}.bin", config.current_pointer);
-        let mut file_path = location.clone();
+        let current_file = format!("log_{}.bin", file_config.current_pointer);
+        let mut file_path = config.location.clone();
         file_path.push(current_file);
 
         let (file, filled) = Self::open_file(file_path).expect("Failed to open WAL file");
         Self {
-            location,
+            location: config.location,
             file,
             filled,
-            config,
+            config: file_config,
         }
     }
 
     /// Write the change to file
     pub fn commit(&mut self, data: &[u8]) {
         let written = match self.file.write(data) {
-            Ok(size) => size,
+            Ok(size) => {
+                if self.config.sync {
+                    let _ = self.file.sync_all();
+                }
+                size
+            }
             Err(e) => {
                 return println!("Failed to write to file: {}", e);
             }
@@ -229,7 +239,13 @@ mod tests {
         meta.write((0, 9));
 
         // write to manager to test that the GC ran
-        let mut manager = FileManager::new("./tmp/testing".into(), PAGE_SIZE * NUM_FILES_SPLIT); // 1MB
+        let config = WalConfig {
+            location: "./tmp/testing".into(),
+            size: PAGE_SIZE * NUM_FILES_SPLIT,
+            fsync: false,
+            buffer_size: 4 * 1024,
+        };
+        let mut manager = FileManager::new(config); // 1MB
         assert_eq!(manager.config.max_files, 5);
         for _ in 0..2 {
             let data = [101; PAGE_SIZE];
@@ -269,7 +285,13 @@ mod tests {
         meta.write((usize::MAX - 9, 1));
 
         // write to manager to test that the GC ran
-        let mut manager = FileManager::new("./tmp/testing".into(), PAGE_SIZE * NUM_FILES_SPLIT);
+        let config = WalConfig {
+            location: "./tmp/testing".into(),
+            size: PAGE_SIZE * NUM_FILES_SPLIT,
+            fsync: false,
+            buffer_size: 4 * 1024,
+        };
+        let mut manager = FileManager::new(config);
         assert_eq!(manager.config.max_files, 5);
         for _ in 0..2 {
             let data = [101; PAGE_SIZE];

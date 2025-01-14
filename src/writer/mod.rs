@@ -22,7 +22,7 @@ impl Writer {
     pub fn new(config: WalConfig) -> Self {
         Self {
             buffer: Mutex::new(Buffer::new(Some(config.buffer_size))),
-            io: Mutex::new(FileManager::new(config.location.clone(), config.size)),
+            io: Mutex::new(FileManager::new(config.clone())),
             config,
         }
     }
