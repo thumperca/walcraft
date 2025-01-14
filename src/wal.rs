@@ -46,19 +46,9 @@ use std::sync::atomic::Ordering::Acquire;
 use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::sync::Arc;
 
-const MODE_IDLE: u8 = 0;
+pub(crate) const MODE_IDLE: u8 = 0;
 const MODE_READ: u8 = 1;
 const MODE_WRITE: u8 = 2;
-
-/// Represents size of data on KBs, MBs or GBs, such as:
-/// - `Size::Kb(8)` means 8 KB
-/// - `Size::Mb(16)` means 16 MB
-/// - `Size::Gb(2)` means 2 GB
-pub enum Size {
-    Kb(usize),
-    Mb(usize),
-    Gb(usize),
-}
 
 pub(crate) struct WalInner<T>
 where
@@ -114,7 +104,7 @@ where
         }
     }
 
-    pub fn with_config(config: WalConfig) -> Self {
+    pub(crate) fn with_config(config: WalConfig) -> Self {
         let inner = Arc::new(WalInner::new(config));
         Self { inner }
     }
@@ -148,7 +138,7 @@ where
             {
                 // check if another thread hasn't already set the value
                 if d != MODE_WRITE {
-                    panic!("Writing logs while reading data is forbidden");
+                    panic!("Walcraft Error: Writing logs while reading data is forbidden");
                 }
             }
         }

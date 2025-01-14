@@ -13,7 +13,7 @@ use std::path::PathBuf;
 /// use walcraft::{Size, WalBuilder, Wal};
 /// // create a wal with 4 KB buffer and 10 GB storage
 /// let wal: Wal<String> = WalBuilder::new().buffer_size(Size::Kb(4)).storage_size(Size::Gb(10)).build().unwrap();
-/// // crate a wal with no buffer, enable fsync and use 250 MB of storage
+/// // create a wal with no buffer, enable fsync and use 250 MB of storage
 /// let wal: Wal<String> = WalBuilder::new().storage_size(Size::Mb(250)).disable_buffer().enable_fsync().build().unwrap();
 /// ```
 pub struct WalBuilder {
@@ -67,7 +67,7 @@ impl WalBuilder {
         self
     }
 
-    pub fn build<T>(mut self) -> Result<Wal<T>, String>
+    pub fn build<T>(self) -> Result<Wal<T>, String>
     where
         T: Serialize + for<'a> Deserialize<'a>,
     {

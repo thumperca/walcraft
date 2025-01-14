@@ -80,10 +80,6 @@ impl Buffer {
         }
         self.inner
     }
-
-    pub fn inner(&self) -> &[u8] {
-        &self.inner
-    }
 }
 
 #[cfg(test)]

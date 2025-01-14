@@ -46,10 +46,6 @@ pub use self::wal::Wal;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-const MODE_IDLE: u8 = 0;
-const MODE_READ: u8 = 1;
-const MODE_WRITE: u8 = 2;
-
 pub const DEFAULT_BUFFER_SIZE: usize = 4096; // 4 KB
 
 /// Represents size of data on KBs, MBs or GBs, such as:

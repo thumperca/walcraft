@@ -1,5 +1,5 @@
+use crate::wal::{Wal, MODE_IDLE};
 use crate::writer::manager::Meta;
-use crate::{Wal, MODE_IDLE};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs::File;
@@ -211,9 +211,9 @@ mod tests {
         drop(wal);
         // read the logs to ensure that everything is there
         let wal: Wal<Log> = Wal::new(location, Some(40));
-        let mut iterator = wal.read().unwrap();
+        let iterator = wal.read().unwrap();
         let mut counter = 0;
-        for i in iterator {
+        for _ in iterator {
             counter += 1;
         }
         assert_eq!(counter, 100000);
