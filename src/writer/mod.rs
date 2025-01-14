@@ -35,6 +35,18 @@ impl Writer {
     /// - `msg`: The log data to be written
     ///
     pub fn log(&self, msg: &[u8]) {
+        // if buffer is disabled, write directly to file
+        if self.config.buffer_size == 0 {
+            let mut lock = self.io.lock().unwrap();
+            lock.commit(msg);
+            return;
+        }
+
+        // Buffer is enabled
+        self.write(msg);
+    }
+
+    fn write(&self, msg: &[u8]) {
         // acquire lock on buffer
         let mut lock = self.buffer.lock().unwrap();
         // add data to buffer
