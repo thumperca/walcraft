@@ -52,7 +52,7 @@ struct FileConfig {
     /// Postfix of current file where data is being stored
     current_pointer: usize,
     /// Pointer to garbage collector
-    /// This is always be 0 if there are no size restrictions on WAL
+    /// This will always be 0 if there are no size restrictions on WAL
     gc_pointer: usize,
 }
 
@@ -86,10 +86,15 @@ impl FileConfig {
     }
 }
 
+/// FileManager is responsible for actual writing of information to disk
 pub(crate) struct FileManager {
+    /// Location where files are stored
     location: PathBuf,
+    /// Handle to current file
     file: File,
+    /// Size of data in current file
     filled: usize,
+    /// Configuration for FileManager on storage of data
     config: FileConfig,
 }
 

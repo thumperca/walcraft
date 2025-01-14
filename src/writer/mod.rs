@@ -37,16 +37,10 @@ impl Writer {
     pub fn log(&self, msg: &[u8]) {
         // if buffer is disabled, write directly to file
         if self.config.buffer_size == 0 {
-            let mut lock = self.io.lock().unwrap();
-            lock.commit(msg);
-            return;
+            return self.write(msg);
         }
 
         // Buffer is enabled
-        self.write(msg);
-    }
-
-    fn write(&self, msg: &[u8]) {
         // acquire lock on buffer
         let mut lock = self.buffer.lock().unwrap();
         // add data to buffer
@@ -68,9 +62,15 @@ impl Writer {
         // acquire lock on io to add the buffer to file
         if flush {
             let data = buffer.consume(true);
-            let mut lock = self.io.lock().unwrap();
-            lock.commit(&data);
+            self.write(&data);
         }
+    }
+
+    /// Write the data to the file
+    fn write(&self, msg: &[u8]) {
+        let mut lock = self.io.lock().unwrap();
+        lock.commit(msg);
+        return;
     }
 
     /// Flush the in-memory buffer to Disk, if any data exists in the buffer
