@@ -35,9 +35,13 @@ impl Writer {
     /// - `msg`: The log data to be written
     ///
     pub fn log(&self, msg: &[u8]) {
-        // if buffer is disabled, write directly to file
+        // if buffer is disabled, write directly to file and exit
         if self.config.buffer_size == 0 {
-            return self.write(msg);
+            let mut buffer = Buffer::new(Some(msg.len() + 2));
+            buffer.try_add(msg);
+            let data = buffer.consume(true);
+            self.write(&data);
+            return;
         }
 
         // Buffer is enabled

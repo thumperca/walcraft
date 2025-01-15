@@ -118,4 +118,31 @@ mod tests {
         let wal = WalBuilder::new().location("./tmp/dupe").build::<Log>();
         assert!(wal.is_ok());
     }
+
+    #[test]
+    fn read_after_write() {
+        let location = "./tmp/testing";
+        std::fs::remove_dir_all(location).ok();
+
+        // write some data
+        let wal = WalBuilder::new()
+            .location(location)
+            .disable_buffer()
+            .build::<Log>()
+            .unwrap();
+        wal.write(Log { id: 1, value: 3.14 });
+        wal.write(Log { id: 2, value: 6.14 });
+        wal.write(Log { id: 3, value: 9.14 });
+        drop(wal);
+
+        // try reading data
+        let wal = WalBuilder::new()
+            .location(location)
+            .disable_buffer()
+            .build::<Log>()
+            .unwrap();
+        wal.flush();
+        let data = wal.read().unwrap().collect::<Vec<_>>();
+        assert_eq!(data.len(), 3);
+    }
 }
