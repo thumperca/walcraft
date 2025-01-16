@@ -111,6 +111,9 @@ let wal = Wal::new("/tmp/logz", Some(20_000));
 
 # Quirks
 
+- Using enum in the log struct is not supported. The library uses `serde` and `bincode` to serialize and deserialize the
+  logs. Enums are not gauranteed to be serialized and deserialized correctly.
+
 The WAL can only be in read mode or write mode, not both at the same time.
 
 - **Ideal**: When created, the WAL is in an idle mode.

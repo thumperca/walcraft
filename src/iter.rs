@@ -96,8 +96,11 @@ where
             }
             // convert bytes to log
             let bytes = self.buffer.drain(0..size).collect::<Vec<_>>();
-            if let Ok(item) = bincode::deserialize(&bytes) {
-                return Some(item);
+            match bincode::deserialize(&bytes) {
+                Ok(item) => return Some(item),
+                Err(err) => {
+                    println!("walcraft serialization error - {}", err);
+                }
             }
         }
     }

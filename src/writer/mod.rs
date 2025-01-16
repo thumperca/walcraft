@@ -74,7 +74,6 @@ impl Writer {
     fn write(&self, msg: &[u8]) {
         let mut lock = self.io.lock().unwrap();
         lock.commit(msg);
-        return;
     }
 
     /// Flush the in-memory buffer to Disk, if any data exists in the buffer
