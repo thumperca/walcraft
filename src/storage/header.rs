@@ -40,10 +40,10 @@ impl Header {
 }
 
 /// Create a new header from a byte array
-impl TryFrom<[u8; HEADER_SIZE]> for Header {
+impl TryFrom<&[u8]> for Header {
     type Error = String;
 
-    fn try_from(data: [u8; HEADER_SIZE]) -> Result<Self, Self::Error> {
+    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
         // header shall be at least 32 bytes long
         if data.len() < 32 {
             return Err("Header length is too short for serialization".to_string());
@@ -75,7 +75,7 @@ fn conversion() {
     let mut header = Header::new(1, 4096);
     header.num_pages = 10;
     let bytes = header.as_bytes();
-    let header = Header::try_from(bytes);
+    let header = Header::try_from(&bytes[..]);
     assert!(header.is_ok());
     let header = header.unwrap();
     assert_eq!(header.segment_id, 1);
