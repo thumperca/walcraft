@@ -40,6 +40,7 @@ mod builder;
 mod iter;
 mod wal;
 pub(crate) mod writer;
+mod storage;
 
 pub use self::builder::WalBuilder;
 pub use self::wal::Wal;
