@@ -115,7 +115,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let wal = WalBuilder::new().location("./tmp/dupe").build::<Log>();
+        let wal = WalBuilder::new().location("./tmp/testing").build::<Log>();
         assert!(wal.is_ok());
     }
 

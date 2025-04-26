@@ -98,7 +98,7 @@ mod tests {
     #[test]
     fn it_works() {
         let mut config = WalConfig::default();
-        config.location = "./tmp/".into();
+        config.location = "./tmp/testing".into();
         let writer = Writer::new(config);
         let data = String::from("This is sparta");
         let data = data.as_bytes();
