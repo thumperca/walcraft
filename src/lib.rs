@@ -38,9 +38,9 @@
 
 mod builder;
 mod iter;
+mod storage;
 mod wal;
 pub(crate) mod writer;
-mod storage;
 
 pub use self::builder::WalBuilder;
 pub use self::wal::Wal;
@@ -48,6 +48,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 pub const DEFAULT_BUFFER_SIZE: usize = 4096; // 4 KB
+pub const WAL_VERSION: usize = 1;
 
 /// Represents size of data on KBs, MBs or GBs, such as:
 /// - `Size::Kb(8)` means 8 KB
