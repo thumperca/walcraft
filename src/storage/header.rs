@@ -9,6 +9,7 @@ pub(crate) struct Header {
     segment_id: usize,
     pub page_size: usize,
     pub num_pages: u32,
+    pub is_dirty: bool,
 }
 
 impl Header {
@@ -19,11 +20,12 @@ impl Header {
             segment_id,
             page_size,
             num_pages: 0,
+            is_dirty: true,
         }
     }
 
     /// Serializes the header to a byte array
-    fn as_bytes(&self) -> [u8; HEADER_SIZE] {
+    pub(crate) fn as_bytes(&self) -> [u8; HEADER_SIZE] {
         let mut data = [0; HEADER_SIZE];
 
         // write the header signature
@@ -66,6 +68,7 @@ impl TryFrom<&[u8]> for Header {
             segment_id,
             page_size,
             num_pages,
+            is_dirty: false,
         })
     }
 }

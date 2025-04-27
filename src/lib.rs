@@ -49,6 +49,8 @@ use std::path::PathBuf;
 
 pub const DEFAULT_BUFFER_SIZE: usize = 4096; // 4 KB
 pub const WAL_VERSION: usize = 1;
+pub const TESTING_DIR: &str = "./tmp/testing";
+pub const MAX_STORAGE: Size = Size::Gb(32768); // 32 TB
 
 /// Represents size of data on KBs, MBs or GBs, such as:
 /// - `Size::Kb(8)` means 8 KB

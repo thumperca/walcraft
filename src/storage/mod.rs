@@ -1,16 +1,10 @@
 mod header;
 mod page;
+mod segment;
 
-use self::header::Header;
 use self::page::Page;
 use crate::WalConfig;
 use std::fs::File;
-
-struct FileSegment {
-    header: Header,
-    file: File,
-    pages: Vec<Page>,
-}
 
 struct Meta {
     gc_start: usize,

@@ -22,9 +22,9 @@ fn bytes_for_value(value: usize) -> usize {
 /// - **Checksum** (32-bit) - A checksum to ensure the integrity of the page.
 ///
 pub(crate) struct Page {
-    id: u32,
+    pub id: u32,
     size: usize,
-    is_dirty: bool,
+    pub is_dirty: bool,
     data: Vec<u8>,
     checksum: u32,
     size_bytes: usize,
@@ -33,6 +33,7 @@ pub(crate) struct Page {
 impl Page {
     /// Create a new empty page
     pub fn new(id: u32, size: usize) -> Self {
+        assert_ne!(id, 0);
         Page {
             id,
             size,
