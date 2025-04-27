@@ -1,4 +1,5 @@
 pub(crate) const HEADER_SIZE: usize = 4096;
+use crate::error::WalError;
 
 /// Header for heap file that stores metadata on the file
 ///
@@ -43,18 +44,18 @@ impl Header {
 
 /// Create a new header from a byte array
 impl TryFrom<&[u8]> for Header {
-    type Error = String;
+    type Error = WalError;
 
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
         // header shall be at least 32 bytes long
         if data.len() < 32 {
-            return Err("Header length is too short for serialization".to_string());
+            return Err(WalError::InvalidLength);
         }
 
         // ensure the first 4 bytes are "HEAD"
         let sign = &data[0..4];
         if sign != "HEAD".as_bytes() {
-            return Err(format!("Invalid header signature: {:?}", sign));
+            return Err(WalError::InvalidSignature);
         }
 
         // read the data

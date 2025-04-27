@@ -37,6 +37,7 @@
 //!```
 
 mod builder;
+pub(crate) mod error;
 mod iter;
 mod storage;
 mod wal;

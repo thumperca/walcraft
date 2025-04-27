@@ -1,3 +1,5 @@
+use crate::error::WalError;
+
 /// Calculate how many bytes are needed to store a given value
 /// For example: 1 byte is needed to store 0-255, 2 bytes for 256-65535, etc.
 fn bytes_for_value(value: usize) -> usize {
@@ -92,17 +94,17 @@ impl Page {
 }
 
 impl TryFrom<&[u8]> for Page {
-    type Error = String;
+    type Error = WalError;
 
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
         if data.len() < 16 {
-            return Err("Page length is too short for serialization".to_string());
+            return Err(WalError::InvalidLength);
         }
 
         // ensure the first 4 bytes are "PAGE"
         let sign = &data[0..4];
         if sign != b"PAGE" {
-            return Err(format!("Invalid page signature: {:?}", sign));
+            return Err(WalError::InvalidSignature);
         }
 
         // read the data

@@ -1,3 +1,4 @@
+use crate::error::WalError;
 use crate::storage::header::{Header, HEADER_SIZE};
 use crate::storage::page::Page;
 use std::collections::VecDeque;
@@ -53,17 +54,18 @@ impl FileSegment {
     }
 
     /// Opens an existing file and load it's latest page in memory
-    pub fn open_existing(path: &str) -> Result<Self, String> {
+    pub fn open_existing(path: &str) -> Result<Self, WalError> {
         let mut file = OpenOptions::new()
             .read(true)
             .write(true)
             .open(path)
-            .map_err(|e| e.to_string())?;
+            .map_err(|_| WalError::OpenFailure)?;
 
         let mut header_data = [0; 4096];
         file.read_exact(&mut header_data)
-            .map_err(|e| e.to_string())?;
-        let header = Header::try_from(&header_data[..]).map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())
+            .map_err(|_| WalError::ReadFailure)?;
+        let header = Header::try_from(&header_data[..])?;
 
         let mut segment = Self {
             header,
@@ -82,16 +84,18 @@ impl FileSegment {
     }
 
     /// Read a specific page from the file
-    fn read_page(&mut self, page_id: u32) -> Result<Page, String> {
+    fn read_page(&mut self, page_id: u32) -> Result<Page, WalError> {
         assert!(page_id <= self.header.num_pages);
         let mut page_data = vec![0; self.header.page_size];
         let offset = HEADER_SIZE + (page_id as usize - 1) * self.header.page_size;
         self.file
             .seek(SeekFrom::Start(offset as u64))
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())
+            .map_err(|_| WalError::SeekFailure)?;
         self.file
             .read_exact(&mut page_data)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())
+            .map_err(|_| WalError::ReadFailure)?;
         Page::try_from(&page_data[..])
     }
 
