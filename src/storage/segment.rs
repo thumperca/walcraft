@@ -36,7 +36,7 @@ impl FileSegment {
         let header = Header::new(segment_id, page_size);
         Ok(Self {
             header,
-            pages: vec![Page::new(1, page_size)],
+            pages: vec![],
             file,
             is_dirty: true,
         })
@@ -71,11 +71,12 @@ impl FileSegment {
             is_dirty: false,
         };
 
-        let page = match segment.header.num_pages {
-            0 => Page::new(0, segment.header.page_size),
-            _ => segment.read_page(segment.header.num_pages)?,
-        };
-        segment.pages.push(page);
+        // Read the latest page into memory
+        if segment.header.num_pages > 0 {
+            let page = segment.read_page(segment.header.num_pages)?;
+            segment.pages.push(page);
+        }
+
         Ok(segment)
     }
 
@@ -94,6 +95,7 @@ impl FileSegment {
     }
 
     pub fn flush(&mut self) -> std::io::Result<()> {
+        println!("Flush called {} {}", self.is_dirty, self.pages.len());
         if self.is_dirty {
             self.sync_header();
             self.sync_pages();
