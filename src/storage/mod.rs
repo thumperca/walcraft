@@ -1,10 +1,8 @@
-mod header;
-mod page;
 mod segment;
 
-use self::page::Page;
+use self::segment::FileSegment;
 use crate::WalConfig;
-use std::fs::File;
+use std::collections::VecDeque;
 
 struct Meta {
     gc_start: usize,
@@ -17,14 +15,9 @@ struct SizeEntry {
     size: usize,
 }
 
-struct Heap {
-    file: File,
-    pages: Vec<Page>,
-}
-
 struct Storage {
     config: WalConfig,
-    heap: Heap,
+    segments: VecDeque<FileSegment>,
     meta: Meta,
 }
 
