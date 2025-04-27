@@ -3,6 +3,7 @@ mod iterator;
 mod page;
 
 use self::header::{Header, HEADER_SIZE};
+use self::iterator::PageIterator;
 use self::page::Page;
 use crate::error::WalError;
 use std::collections::VecDeque;
@@ -151,6 +152,11 @@ impl FileSegment {
         Page::new(self.header.num_pages, self.header.page_size)
     }
 
+    /// Returns an iterator that yields each record from the segment file
+    pub fn iter(&mut self) -> PageIterator {
+        PageIterator::new(self)
+    }
+
     /// Flush all in-memory changes to IO
     pub fn flush(&mut self) -> std::io::Result<()> {
         if self.is_dirty {
@@ -196,6 +202,7 @@ mod tests {
 
     // utility function to re-create test dir for each test
     pub fn create_test_dir() {
+        std::fs::remove_dir_all(TESTING_DIR).unwrap();
         std::fs::create_dir_all(TESTING_DIR).unwrap();
         let mut path = PathBuf::from(TESTING_DIR);
         path.push("logs");
@@ -232,6 +239,7 @@ mod tests {
     // test to create a file segment with some data and read it back
     #[test]
     fn open_filled() {
+        // fixtures
         create_test_dir();
         let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
         segment.append(b"John Doe").expect("Failed to append data");
@@ -239,10 +247,52 @@ mod tests {
         segment.flush().unwrap();
         drop(segment);
         let path = FileSegment::get_path(TESTING_DIR, 1);
+        // read data
         let mut segment = FileSegment::open_existing(path.to_str().unwrap()).unwrap();
         let data = segment.read_page_entries(1).unwrap();
         assert_eq!(data.len(), 2);
         assert_eq!(data[0], b"John Doe");
         assert_eq!(data[1], b"Jane Doe");
+    }
+
+    #[test]
+    fn iter() {
+        // fixtures
+        create_test_dir();
+        let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
+        segment.append(b"John Doe").expect("Failed to append data");
+        segment.append(b"Jane Doe").expect("Failed to append data");
+        segment.flush().unwrap();
+        drop(segment);
+        let path = FileSegment::get_path(TESTING_DIR, 1);
+        // read data
+        let mut segment = FileSegment::open_existing(path.to_str().unwrap()).unwrap();
+        let items = segment.iter().collect::<Vec<_>>();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0], b"John Doe");
+        assert_eq!(items[1], b"Jane Doe");
+    }
+
+    #[test]
+    fn multi_page_iter() {
+        // fixtures
+        create_test_dir();
+        let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4 * 1024).unwrap();
+        for i in 0..=1_000 {
+            segment
+                .append(format!("Record number {}", i).as_bytes())
+                .expect("Failed to append data");
+        }
+        segment.flush().unwrap();
+        drop(segment);
+        let path = FileSegment::get_path(TESTING_DIR, 1);
+        // read data
+        let mut segment = FileSegment::open_existing(path.to_str().unwrap()).unwrap();
+        let items = segment.iter().collect::<Vec<_>>();
+        assert_eq!(items.len(), 1_001);
+        assert_eq!(&items[0], &b"Record number 0");
+        assert_eq!(&items[100], &b"Record number 100");
+        assert_eq!(&items[555], &b"Record number 555");
+        assert_eq!(&items[1000], &b"Record number 1000");
     }
 }

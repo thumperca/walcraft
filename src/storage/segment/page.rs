@@ -13,7 +13,7 @@ use crate::error::WalError;
 ///
 pub(crate) struct Page {
     pub id: u32,
-    size: usize,
+    max_size: usize,
     pub is_dirty: bool,
     data: Vec<u8>,
     checksum: u32,
@@ -25,7 +25,7 @@ impl Page {
         assert_ne!(id, 0);
         Page {
             id,
-            size,
+            max_size: size,
             is_dirty: false,
             data: Vec::with_capacity(size),
             checksum: 0,
@@ -46,7 +46,7 @@ impl Page {
         let signature_size = 4;
         let checksum_size = 4;
         let page_id_size = 4;
-        self.size - (signature_size + checksum_size + page_id_size)
+        self.max_size - (signature_size + checksum_size + page_id_size)
     }
 
     /// Calculate how many free bytes are available in the current page
@@ -56,7 +56,7 @@ impl Page {
 
     /// Add a new item to the page
     pub fn add(&mut self, data: &[u8]) -> bool {
-        if self.data.len() + data.len() > self.size {
+        if self.data.len() + data.len() > self.size_data() {
             return false;
         }
         self.data.extend_from_slice(data);
@@ -71,6 +71,9 @@ impl Page {
         let mut pointer = 0;
         loop {
             let start = pointer + length_header;
+            if start >= self.data.len() {
+                break;
+            }
             let mut length_bytes = (&self.data[pointer..start]).to_vec();
             while length_bytes.len() < 4 {
                 length_bytes.push(0);
@@ -89,14 +92,14 @@ impl Page {
 
     /// Convert the page to bytes array
     pub fn as_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(self.size);
+        let mut bytes = Vec::with_capacity(self.max_size);
         let mut data = vec![0u8; self.size_data()];
         data[..self.data.len()].copy_from_slice(&self.data);
         bytes.extend_from_slice(b"PAGE");
         bytes.extend_from_slice(&self.id.to_le_bytes());
         bytes.extend_from_slice(&data);
         bytes.extend_from_slice(&self.checksum.to_le_bytes());
-        assert_eq!(bytes.len(), self.size); // ensure the page is aligned to the page size
+        assert_eq!(bytes.len(), self.max_size); // ensure the page is aligned to the page size
         assert_eq!(bytes.len() % 4096, 0); // ensure the page is aligned to 4 KiB
         bytes
     }
@@ -124,7 +127,7 @@ impl TryFrom<&[u8]> for Page {
 
         Ok(Page {
             id,
-            size,
+            max_size: size,
             is_dirty: false,
             data: page_data.to_vec(),
             checksum,

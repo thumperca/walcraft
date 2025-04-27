@@ -1,7 +1,7 @@
 use crate::storage::segment::FileSegment;
 use std::collections::VecDeque;
 
-struct PageIterator<'a> {
+pub(crate) struct PageIterator<'a> {
     segment: &'a mut FileSegment,
     current_page: u32,
     buffer: VecDeque<Vec<u8>>,
