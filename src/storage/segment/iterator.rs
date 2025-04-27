@@ -1,0 +1,79 @@
+use crate::storage::segment::FileSegment;
+use std::collections::VecDeque;
+
+struct PageIterator<'a> {
+    segment: &'a mut FileSegment,
+    current_page: u32,
+    buffer: VecDeque<Vec<u8>>,
+}
+
+impl<'a> PageIterator<'a> {
+    pub fn new(segment: &'a mut FileSegment) -> Self {
+        PageIterator {
+            segment,
+            current_page: 0,
+            buffer: VecDeque::new(),
+        }
+    }
+}
+
+impl<'a> Iterator for PageIterator<'a> {
+    type Item = Vec<u8>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // buffer contains records
+        if !self.buffer.is_empty() {
+            return self.buffer.pop_front();
+        }
+        // read from next page
+        loop {
+            self.current_page += 1;
+            // reached end of file
+            if self.current_page > self.segment.header.num_pages {
+                return None;
+            }
+            // read next page
+            let page = match self.segment.read_page(self.current_page) {
+                Ok(page) => page,
+                Err(e) => {
+                    println!(
+                        "Walcraft - Error reading Segment: {}, Page: {}, Error: {:?}",
+                        self.segment.header.segment_id, self.current_page, e
+                    );
+                    continue;
+                }
+            };
+            // add entries to buffer
+            let entries = page.read(self.segment.header.length_prefix);
+            self.buffer.extend(entries);
+            break;
+        }
+        self.buffer.pop_front()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::create_test_dir;
+    use super::*;
+    use crate::TESTING_DIR;
+
+    #[test]
+    fn it_works() {
+        create_test_dir();
+        // Add some data to the segment
+        let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
+        segment.append(b"Hello").unwrap();
+        segment.append(b"World").unwrap();
+        segment.flush().unwrap();
+        drop(segment);
+        // open segment
+        let path = FileSegment::get_path(TESTING_DIR, 1);
+        let mut segment = FileSegment::open_existing(path.to_str().unwrap()).unwrap();
+        // Iterate over the pages
+        let mut iterator = PageIterator::new(&mut segment).collect::<Vec<_>>();
+        assert_eq!(iterator.len(), 2);
+        assert_eq!(iterator.pop().unwrap(), b"World");
+        assert_eq!(iterator.pop().unwrap(), b"Hello");
+    }
+}

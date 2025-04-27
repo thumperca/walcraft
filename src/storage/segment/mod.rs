@@ -1,6 +1,10 @@
+mod header;
+mod iterator;
+mod page;
+
+use self::header::{Header, HEADER_SIZE};
+use self::page::Page;
 use crate::error::WalError;
-use crate::storage::header::{Header, HEADER_SIZE};
-use crate::storage::page::Page;
 use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -12,7 +16,7 @@ use std::path::PathBuf;
 /// - Read and write the file header.
 /// - Append data to the file in page-sized increments.
 /// - Handle synchronization/flush if needed.
-struct FileSegment {
+pub(crate) struct FileSegment {
     header: Header,
     pages: VecDeque<Page>,
     file: File,
@@ -99,7 +103,7 @@ impl FileSegment {
         Page::try_from(&page_data[..])
     }
 
-    /// Read
+    /// Read all entries from a single page
     fn read_page_entries(&mut self, page_id: u32) -> Result<Vec<Vec<u8>>, WalError> {
         let page = self.read_page(page_id)?;
         Ok(page.read(self.header.length_prefix))
@@ -191,7 +195,7 @@ mod tests {
     use crate::TESTING_DIR;
 
     // utility function to re-create test dir for each test
-    fn create_test_dir() {
+    pub fn create_test_dir() {
         std::fs::create_dir_all(TESTING_DIR).unwrap();
         let mut path = PathBuf::from(TESTING_DIR);
         path.push("logs");

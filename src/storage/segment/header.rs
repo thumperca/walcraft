@@ -9,7 +9,7 @@ pub(crate) struct Header {
     /// Version of WAL file
     version: usize,
     /// Identifier for the file segment
-    segment_id: usize,
+    pub segment_id: usize,
     /// Size of a single page in bytes
     pub page_size: usize,
     /// Number of pages in the segment
