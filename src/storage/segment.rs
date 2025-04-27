@@ -1,5 +1,6 @@
 use crate::storage::header::{Header, HEADER_SIZE};
 use crate::storage::page::Page;
+use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
@@ -12,7 +13,7 @@ use std::path::PathBuf;
 /// - Handle synchronization/flush if needed.
 struct FileSegment {
     header: Header,
-    pages: Vec<Page>,
+    pages: VecDeque<Page>,
     file: File,
     is_dirty: bool,
 }
@@ -36,7 +37,7 @@ impl FileSegment {
         let header = Header::new(segment_id, page_size);
         Ok(Self {
             header,
-            pages: vec![],
+            pages: VecDeque::new(),
             file,
             is_dirty: true,
         })
@@ -66,7 +67,7 @@ impl FileSegment {
 
         let mut segment = Self {
             header,
-            pages: Vec::new(),
+            pages: VecDeque::new(),
             file,
             is_dirty: false,
         };
@@ -74,7 +75,7 @@ impl FileSegment {
         // Read the latest page into memory
         if segment.header.num_pages > 0 {
             let page = segment.read_page(segment.header.num_pages)?;
-            segment.pages.push(page);
+            segment.pages.push_back(page);
         }
 
         Ok(segment)
@@ -94,6 +95,7 @@ impl FileSegment {
         Page::try_from(&page_data[..])
     }
 
+    /// Flush all in-memory changes to IO
     pub fn flush(&mut self) -> std::io::Result<()> {
         println!("Flush called {} {}", self.is_dirty, self.pages.len());
         if self.is_dirty {
@@ -103,6 +105,7 @@ impl FileSegment {
         Ok(())
     }
 
+    /// Flush header to IO
     fn sync_header(&mut self) {
         if !self.header.is_dirty {
             return;
@@ -112,7 +115,9 @@ impl FileSegment {
         self.header.is_dirty = false;
     }
 
+    /// Flush dirty pages to IO
     fn sync_pages(&mut self) {
+        // sync all dirty pages
         for page in &mut self.pages {
             if !page.is_dirty {
                 continue;
@@ -122,6 +127,10 @@ impl FileSegment {
             self.file.write_all(&page.as_bytes()).unwrap();
             page.is_dirty = false;
         }
+        // remove all but latest page from memory
+        while self.pages.len() > 1 {
+            self.pages.pop_front();
+        }
     }
 }
 
@@ -130,6 +139,7 @@ mod tests {
     use super::*;
     use crate::TESTING_DIR;
 
+    // utility function to re-create test dir for each test
     fn create_test_dir() {
         std::fs::create_dir_all(TESTING_DIR).unwrap();
         let mut path = PathBuf::from(TESTING_DIR);
@@ -143,15 +153,7 @@ mod tests {
         let segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
     }
 
-    #[test]
-    fn open() {
-        let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
-        segment.flush().unwrap();
-        drop(segment);
-        let path = FileSegment::get_path(TESTING_DIR, 1);
-        let segment = FileSegment::open_existing(path.to_str().unwrap()).unwrap();
-    }
-
+    // test file_path logic
     #[test]
     fn file_path() {
         let path = FileSegment::get_path(TESTING_DIR, 1);
@@ -159,5 +161,25 @@ mod tests {
             path.to_str().unwrap(),
             "./tmp/testing/log/wal_0000000001.log"
         );
+    }
+
+    // test to create a file segment with no data and read it back
+    #[test]
+    fn open_empty() {
+        let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
+        segment.flush().unwrap();
+        drop(segment);
+        let path = FileSegment::get_path(TESTING_DIR, 1);
+        let segment = FileSegment::open_existing(path.to_str().unwrap()).unwrap();
+    }
+
+    // test to create a file segment with some data and read it back
+    #[test]
+    fn open_filled() {
+        let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
+        segment.flush().unwrap();
+        drop(segment);
+        let path = FileSegment::get_path(TESTING_DIR, 1);
+        let segment = FileSegment::open_existing(path.to_str().unwrap()).unwrap();
     }
 }
