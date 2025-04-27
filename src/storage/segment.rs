@@ -48,7 +48,7 @@ impl FileSegment {
     fn get_path(base_dir: &str, segment_id: usize) -> PathBuf {
         let mut path = PathBuf::from(base_dir);
         let width = u32::MAX.to_string().len();
-        let file = format!("log/wal_{:0width$}.log", segment_id, width = width);
+        let file = format!("logs/wal_{:0width$}.log", segment_id, width = width);
         path.push(file);
         path
     }
@@ -99,9 +99,56 @@ impl FileSegment {
         Page::try_from(&page_data[..])
     }
 
+    /// Read
+    fn read_page_entries(&mut self, page_id: u32) -> Result<Vec<Vec<u8>>, WalError> {
+        let page = self.read_page(page_id)?;
+        Ok(page.read(self.header.length_prefix))
+    }
+
+    /// Add a new log to file segment
+    pub fn append(&mut self, data: &[u8]) -> Result<(), WalError> {
+        // First page of segment
+        if self.header.num_pages == 0 {
+            let page = self.new_page();
+            self.pages.push_back(page);
+        }
+
+        // prefix data with length
+        let mut entry = vec![0u8; data.len() + self.header.length_prefix];
+        entry[0..self.header.length_prefix]
+            .copy_from_slice(&data.len().to_le_bytes()[..self.header.length_prefix]);
+        entry[self.header.length_prefix..].copy_from_slice(data);
+
+        // add entry to latest page and return if success
+        let page = self.pages.back_mut().unwrap();
+        if page.add(&entry) {
+            self.is_dirty = true;
+            return Ok(());
+        }
+
+        // Failed to add to existing page
+        // check if segment is filled
+        if self.header.num_pages == u32::MAX {
+            return Err(WalError::SegmentFull);
+        }
+
+        // write to a new page
+        let mut page = self.new_page();
+        page.add(&entry);
+        self.pages.push_back(page);
+
+        Ok(())
+    }
+
+    fn new_page(&mut self) -> Page {
+        self.header.num_pages += 1;
+        self.header.is_dirty = true;
+        self.is_dirty = true;
+        Page::new(self.header.num_pages, self.header.page_size)
+    }
+
     /// Flush all in-memory changes to IO
     pub fn flush(&mut self) -> std::io::Result<()> {
-        println!("Flush called {} {}", self.is_dirty, self.pages.len());
         if self.is_dirty {
             self.sync_header();
             self.sync_pages();
@@ -147,7 +194,7 @@ mod tests {
     fn create_test_dir() {
         std::fs::create_dir_all(TESTING_DIR).unwrap();
         let mut path = PathBuf::from(TESTING_DIR);
-        path.push("log");
+        path.push("logs");
         std::fs::create_dir_all(path).unwrap();
     }
 
@@ -163,13 +210,14 @@ mod tests {
         let path = FileSegment::get_path(TESTING_DIR, 1);
         assert_eq!(
             path.to_str().unwrap(),
-            "./tmp/testing/log/wal_0000000001.log"
+            "./tmp/testing/logs/wal_0000000001.log"
         );
     }
 
     // test to create a file segment with no data and read it back
     #[test]
     fn open_empty() {
+        create_test_dir();
         let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
         segment.flush().unwrap();
         drop(segment);
@@ -180,10 +228,17 @@ mod tests {
     // test to create a file segment with some data and read it back
     #[test]
     fn open_filled() {
+        create_test_dir();
         let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
+        segment.append(b"John Doe").expect("Failed to append data");
+        segment.append(b"Jane Doe").expect("Failed to append data");
         segment.flush().unwrap();
         drop(segment);
         let path = FileSegment::get_path(TESTING_DIR, 1);
-        let segment = FileSegment::open_existing(path.to_str().unwrap()).unwrap();
+        let mut segment = FileSegment::open_existing(path.to_str().unwrap()).unwrap();
+        let data = segment.read_page_entries(1).unwrap();
+        assert_eq!(data.len(), 2);
+        assert_eq!(data[0], b"John Doe");
+        assert_eq!(data[1], b"Jane Doe");
     }
 }

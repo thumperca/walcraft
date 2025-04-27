@@ -1,17 +1,5 @@
 use crate::error::WalError;
 
-/// Calculate how many bytes are needed to store a given value
-/// For example: 1 byte is needed to store 0-255, 2 bytes for 256-65535, etc.
-fn bytes_for_value(value: usize) -> usize {
-    let mut counter = 1;
-    loop {
-        if usize::pow(2, counter * 8) > value {
-            return counter as usize;
-        }
-        counter += 1;
-    }
-}
-
 /// A page is simply a fixed-size block of bytes that the WAL uses as its basic unit of I/O.
 ///
 /// The size of the page is in multiple of 4 KiB. All writes and reads go in page-sized chunks.
@@ -29,7 +17,6 @@ pub(crate) struct Page {
     pub is_dirty: bool,
     data: Vec<u8>,
     checksum: u32,
-    size_bytes: usize,
 }
 
 impl Page {
@@ -42,7 +29,6 @@ impl Page {
             is_dirty: false,
             data: Vec::with_capacity(size),
             checksum: 0,
-            size_bytes: bytes_for_value(size),
         }
     }
 
@@ -70,12 +56,35 @@ impl Page {
 
     /// Add a new item to the page
     pub fn add(&mut self, data: &[u8]) -> bool {
-        if self.data.len() + data.len() + self.size_bytes > self.size {
+        if self.data.len() + data.len() > self.size {
             return false;
         }
         self.data.extend_from_slice(data);
         self.is_dirty = true;
         true
+    }
+
+    /// Read individual records from the page
+    pub fn read(&self, length_header: usize) -> Vec<Vec<u8>> {
+        let mut d = Vec::new();
+        // convert a single bytes sequence to vector of individual sequences
+        let mut pointer = 0;
+        loop {
+            let start = pointer + length_header;
+            let mut length_bytes = (&self.data[pointer..start]).to_vec();
+            while length_bytes.len() < 4 {
+                length_bytes.push(0);
+            }
+            let length = u32::from_le_bytes(length_bytes.try_into().unwrap()) as usize;
+            if length == 0 || start >= self.data.len() {
+                break;
+            }
+            let end = start + length;
+            let data = (&self.data[start..end]).to_vec();
+            d.push(data);
+            pointer = end;
+        }
+        d
     }
 
     /// Convert the page to bytes array
@@ -119,7 +128,6 @@ impl TryFrom<&[u8]> for Page {
             is_dirty: false,
             data: page_data.to_vec(),
             checksum,
-            size_bytes: bytes_for_value(size),
         })
     }
 }
@@ -127,15 +135,6 @@ impl TryFrom<&[u8]> for Page {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn util_fn() {
-        assert_eq!(bytes_for_value(100), 1);
-        assert_eq!(bytes_for_value(200), 1);
-        assert_eq!(bytes_for_value(300), 2);
-        assert_eq!(bytes_for_value(50_000), 2);
-        assert_eq!(bytes_for_value(100_000), 3);
-    }
 
     #[test]
     fn available_size() {

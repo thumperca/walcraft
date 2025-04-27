@@ -6,11 +6,19 @@ use crate::error::WalError;
 /// This metadata is essential when reading the file back
 /// as the version or page_size may changes over time
 pub(crate) struct Header {
+    /// Version of WAL file
     version: usize,
+    /// Identifier for the file segment
     segment_id: usize,
+    /// Size of a single page in bytes
     pub page_size: usize,
+    /// Number of pages in the segment
     pub num_pages: u32,
+    /// Flag to indicate if the header is dirty
     pub is_dirty: bool,
+    /// Size of length prefix for the data
+    /// This is based on the page size
+    pub length_prefix: usize,
 }
 
 impl Header {
@@ -22,6 +30,19 @@ impl Header {
             page_size,
             num_pages: 0,
             is_dirty: true,
+            length_prefix: Self::bytes_for_value(page_size),
+        }
+    }
+
+    /// Calculate how many bytes are needed to store a given value
+    /// For example: 1 byte is needed to store 0-255, 2 bytes for 256-65535, etc.
+    pub(crate) fn bytes_for_value(value: usize) -> usize {
+        let mut counter = 1;
+        loop {
+            if usize::pow(2, counter * 8) > value {
+                return counter as usize;
+            }
+            counter += 1;
         }
     }
 
@@ -70,6 +91,7 @@ impl TryFrom<&[u8]> for Header {
             page_size,
             num_pages,
             is_dirty: false,
+            length_prefix: Self::bytes_for_value(page_size),
         })
     }
 }
@@ -85,4 +107,13 @@ fn conversion() {
     assert_eq!(header.segment_id, 1);
     assert_eq!(header.page_size, 4096);
     assert_eq!(header.num_pages, 10);
+}
+
+#[test]
+fn util_fn() {
+    assert_eq!(Header::bytes_for_value(100), 1);
+    assert_eq!(Header::bytes_for_value(200), 1);
+    assert_eq!(Header::bytes_for_value(300), 2);
+    assert_eq!(Header::bytes_for_value(50_000), 2);
+    assert_eq!(Header::bytes_for_value(100_000), 3);
 }
