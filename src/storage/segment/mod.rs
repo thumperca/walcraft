@@ -158,40 +158,50 @@ impl FileSegment {
     }
 
     /// Flush all in-memory changes to IO
-    pub fn flush(&mut self) -> std::io::Result<()> {
+    pub fn flush(&mut self) -> Result<(), WalError> {
         if self.is_dirty {
-            self.sync_header();
-            self.sync_pages();
+            self.sync_header()?;
+            self.sync_pages()?;
         }
         Ok(())
     }
 
     /// Flush header to IO
-    fn sync_header(&mut self) {
+    fn sync_header(&mut self) -> Result<(), WalError> {
         if !self.header.is_dirty {
-            return;
+            return Ok(());
         }
-        self.file.seek(SeekFrom::Start(0)).unwrap();
-        self.file.write_all(&self.header.as_bytes()).unwrap();
+        self.file
+            .seek(SeekFrom::Start(0))
+            .map_err(|_| WalError::SeekFailure)?;
+        self.file
+            .write_all(&self.header.as_bytes())
+            .map_err(|_| WalError::WriteFailure)?;
         self.header.is_dirty = false;
+        Ok(())
     }
 
     /// Flush dirty pages to IO
-    fn sync_pages(&mut self) {
+    fn sync_pages(&mut self) -> Result<(), WalError> {
         // sync all dirty pages
         for page in &mut self.pages {
             if !page.is_dirty {
                 continue;
             }
             let offset = HEADER_SIZE + (page.id as usize - 1) * self.header.page_size;
-            self.file.seek(SeekFrom::Start(offset as u64)).unwrap();
-            self.file.write_all(&page.as_bytes()).unwrap();
+            self.file
+                .seek(SeekFrom::Start(offset as u64))
+                .map_err(|_| WalError::SeekFailure)?;
+            self.file
+                .write_all(&page.as_bytes())
+                .map_err(|_| WalError::WriteFailure)?;
             page.is_dirty = false;
         }
         // remove all but latest page from memory
         while self.pages.len() > 1 {
             self.pages.pop_front();
         }
+        Ok(())
     }
 }
 

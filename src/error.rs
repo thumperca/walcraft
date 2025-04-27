@@ -5,6 +5,7 @@ pub enum WalError {
     InvalidLength,
     InvalidSignature,
     SeekFailure,
+    WriteFailure,
     ReadFailure,
     OpenFailure,
 }
