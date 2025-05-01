@@ -1,20 +1,18 @@
+mod meta;
 mod segment;
 
+use self::meta::Meta;
 use self::segment::FileSegment;
 use crate::WalConfig;
 use std::collections::VecDeque;
 
-struct Meta {
-    gc_start: usize,
-    gc_end: usize,
-    sizes: Vec<SizeEntry>,
-}
-
-struct SizeEntry {
-    file_id: usize,
-    size: usize,
-}
-
+/// Storage manager for the WAL
+///
+/// This module is responsible for the actual IO operations, including
+/// - Reading data from IO
+/// - Writing data to IO
+/// - Garbage Collection
+///
 struct Storage {
     config: WalConfig,
     segments: VecDeque<FileSegment>,
