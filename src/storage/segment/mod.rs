@@ -9,7 +9,7 @@ use crate::error::WalError;
 use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Deals with a single file that comprises the header plus pages.
 ///
@@ -50,8 +50,8 @@ impl FileSegment {
     }
 
     /// Get the path of the segment file
-    fn get_path(base_dir: &str, segment_id: usize) -> PathBuf {
-        let mut path = PathBuf::from(base_dir);
+    pub(crate) fn get_path<P: AsRef<Path>>(base_dir: P, segment_id: usize) -> PathBuf {
+        let mut path = PathBuf::from(base_dir.as_ref());
         let width = u32::MAX.to_string().len();
         let file = format!("logs/wal_{:0width$}.log", segment_id, width = width);
         path.push(file);

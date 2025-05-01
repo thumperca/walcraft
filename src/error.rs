@@ -1,5 +1,6 @@
 #[derive(Debug)]
 pub enum WalError {
+    MetaFileError,
     SegmentFull,
     DeserializationError,
     InvalidLength,
@@ -8,4 +9,5 @@ pub enum WalError {
     WriteFailure,
     ReadFailure,
     OpenFailure,
+    GcFailure,
 }
