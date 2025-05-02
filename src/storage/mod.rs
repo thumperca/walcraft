@@ -199,4 +199,7 @@ mod tests {
 
     #[test]
     fn garbage_collection() {}
+
+    #[test]
+    fn wrapping_garbage_collection() {}
 }

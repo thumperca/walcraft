@@ -88,7 +88,7 @@ impl StorageFactory {
             })?;
             if meta.is_file() {
                 let f = file_name.replace("wal_", "");
-                let f = f.replace(".log", "");
+                let f = f.replace(".bin", "");
                 let file_id = match f.parse::<u32>() {
                     Ok(v) => v,
                     Err(_) => continue,

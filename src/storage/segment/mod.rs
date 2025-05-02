@@ -60,7 +60,7 @@ impl FileSegment {
     pub(crate) fn get_path<P: AsRef<Path>>(base_dir: P, segment_id: u32) -> PathBuf {
         let mut path = PathBuf::from(base_dir.as_ref());
         let width = u32::MAX.to_string().len();
-        let file = format!("logs/wal_{:0width$}.log", segment_id, width = width);
+        let file = format!("logs/wal_{:0width$}.bin", segment_id, width = width);
         path.push(file);
         path
     }
@@ -275,7 +275,7 @@ mod tests {
         let path = FileSegment::get_path(TESTING_DIR, 1);
         assert_eq!(
             path.to_str().unwrap(),
-            "./tmp/testing/logs/wal_0000000001.log"
+            "./tmp/testing/logs/wal_0000000001.bin"
         );
     }
 
