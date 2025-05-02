@@ -90,8 +90,7 @@ impl FileSegment {
 
         // ensure the file size is correct
         let file_size = metadata.len() as usize;
-        let expected_size =
-            PAGE_MULTIPLIER + (segment.header.num_pages as usize) * segment.header.page_size;
+        let expected_size = segment.len();
         // reset the header if corruption is detected
         if expected_size != file_size {
             println!(
@@ -196,6 +195,11 @@ impl FileSegment {
             self.is_dirty = false;
         }
         Ok(())
+    }
+
+    /// Returns the size this segment will take on disk when flushed without adding any new information
+    pub fn len(&self) -> usize {
+        PAGE_MULTIPLIER + self.header.num_pages as usize * self.header.page_size
     }
 
     /// Flush header to IO

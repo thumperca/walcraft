@@ -1,4 +1,5 @@
 use crate::error::WalError;
+use crate::storage::segment::FileSegment;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -31,6 +32,22 @@ impl Meta {
             current_pointer: 0,
             segments: VecDeque::new(),
         }
+    }
+
+    /// Update the segments metadata
+    pub(crate) fn update(&mut self, segment: &FileSegment) {
+        for entry in &mut self.segments {
+            if entry.file_id == segment.header.segment_id {
+                entry.file_size = segment.len();
+                self.dirty = true;
+                break;
+            }
+        }
+        self.segments.push_back(SizeEntry {
+            file_id: segment.header.segment_id,
+            page_size: segment.header.page_size,
+            file_size: segment.len(),
+        });
     }
 }
 

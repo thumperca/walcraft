@@ -51,13 +51,19 @@ impl Storage {
     }
 
     pub fn flush(&mut self) -> Result<(), WalError> {
+        // sync all active segments
         for segment in &mut self.segments {
             if segment.is_dirty() {
                 segment.flush()?;
             }
         }
-
-        Ok(())
+        // free up memory and update metadata
+        while self.segments.len() > 1 {
+            let segment = self.segments.pop_front().unwrap();
+            self.meta.update(&segment);
+        }
+        // run garbage collection on disk
+        self.gc()
     }
 
     /// Load a segment file into memory for writing
@@ -78,9 +84,7 @@ impl Storage {
         let path = FileSegment::get_path(&self.config.location, current_file);
         let segment = FileSegment::open_existing(path)?;
         // check segment's page_size and total file size
-        let segment_size =
-            PAGE_MULTIPLIER + segment.header.num_pages as usize * segment.header.page_size;
-        let page_full = segment_size >= self.config.max_file_size();
+        let page_full = segment.len() >= self.config.max_file_size();
         let page_size_mismatch = segment.header.page_size != self.config.page_size;
         // open a new segment if the page_size is different or the segment is full
         if page_full || page_size_mismatch {
