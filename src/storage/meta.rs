@@ -63,7 +63,7 @@ impl Meta {
         Ok(())
     }
 
-    fn path<P: AsRef<Path>>(base_dir: P) -> PathBuf {
+    pub fn path<P: AsRef<Path>>(base_dir: P) -> PathBuf {
         let mut path = PathBuf::from(base_dir.as_ref());
         path.push("meta.toml");
         path

@@ -29,7 +29,7 @@ impl StorageFactory {
 
     /// Read the metadata file from the disk
     fn read_meta(path: &PathBuf) -> Result<Meta, WalError> {
-        let path = Storage::meta_path(path);
+        let path = Meta::path(path);
         // create a default object for the first run
         if !path.exists() {
             return Ok(Meta::new(path));
