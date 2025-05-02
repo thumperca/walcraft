@@ -63,8 +63,8 @@ mod tests {
         create_test_dir();
         // Add some data to the segment
         let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
-        segment.append(b"Hello").unwrap();
-        segment.append(b"World").unwrap();
+        assert!(segment.append(b"Hello"));
+        assert!(segment.append(b"World"));
         segment.flush().unwrap();
         drop(segment);
         // open segment

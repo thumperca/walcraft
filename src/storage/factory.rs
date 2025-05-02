@@ -1,8 +1,7 @@
 use super::Storage;
 use crate::error::WalError;
 use crate::storage::meta::{Meta, SizeEntry};
-use crate::storage::segment::FileSegment;
-use crate::{WalConfig2, PAGE_MULTIPLIER};
+use crate::WalConfig2;
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 
@@ -13,18 +12,25 @@ pub(crate) struct StorageFactory {
 
 impl StorageFactory {
     pub fn new(config: WalConfig2) -> Result<Storage, WalError> {
-        std::fs::create_dir_all(&config.location)
-            .map_err(|_| WalError::IoError("Failed to create WAL directory".to_string()))?;
+        Self::create_dirs(config.location.clone())?;
         let meta = Self::read_meta(&config.location)?;
         let mut factory = Self { meta, config };
-        let segment = factory.init()?;
+        factory.sync_with_disk()?;
         let mut storage = Storage {
             config: factory.config,
             meta: factory.meta,
-            segments: VecDeque::from([segment]),
+            segments: VecDeque::new(),
         };
         storage.gc()?;
         Ok(storage)
+    }
+
+    /// Create the WAL and log directory if it doesn't exist
+    fn create_dirs(mut location: PathBuf) -> Result<(), WalError> {
+        let error_fn = |e| WalError::IoError(format!("Failed to create WAL directory: {}", e));
+        std::fs::create_dir_all(&location).map_err(error_fn)?;
+        location.push("logs");
+        std::fs::create_dir_all(&location).map_err(error_fn)
     }
 
     /// Read the metadata file from the disk
@@ -40,43 +46,15 @@ impl StorageFactory {
         Meta::read_from_file(path)
     }
 
-    /// Initialize the storage layer
-    ///
-    /// This process performs 3 tasks:
-    /// - Ensures the size of the last segment is accurate
-    /// - Runs garbage collection
-    /// - Load a segment file in memory for future writes
-    ///
-    fn init(&mut self) -> Result<FileSegment, WalError> {
-        self.sync_with_disk()?;
-        let segment = self.load_segment()?;
-        Ok(segment)
-    }
-
     fn sync_with_disk(&mut self) -> Result<(), WalError> {
         let mut location = self.config.location.clone();
         location.push("logs");
-        // create dir if not exists
-        self.ensure_location(&location)?;
         // sync the metadata with the logs directory
         let sizes = self.read_contents(&location)?;
         self.update_meta(sizes);
         // write the metadata to IO
         if self.meta.dirty {
             self.meta.sync()?;
-        }
-        Ok(())
-    }
-
-    /// Create the log directory if it doesn't exist
-    fn ensure_location(&self, path: &PathBuf) -> Result<(), WalError> {
-        // create logs directory if it doesn't exist
-        let exists = std::fs::exists(&path)
-            .map_err(|e| WalError::IoError(format!("Failed to read WAL logs directory: {}", e)))?;
-        if !exists {
-            std::fs::create_dir_all(&path).map_err(|e| {
-                WalError::IoError(format!("Failed to create WAL logs directory: {}", e))
-            })?;
         }
         Ok(())
     }
@@ -179,36 +157,6 @@ impl StorageFactory {
             }
         }
         true
-    }
-
-    /// Load a segment file into memory for writing
-    ///
-    /// This is done by reading the last segment file if space is left in the last file.
-    /// It creates a new file segment if the last file is full, no file exists, or
-    /// the page size is different from the last file.
-    ///
-    fn load_segment(&mut self) -> Result<FileSegment, WalError> {
-        let current_file = self.meta.current_pointer;
-        let path = FileSegment::get_path(&self.config.location, current_file);
-        let mut segment = FileSegment::open_existing(path)?;
-        // open a new segment if the page_size is different
-        if segment.header.page_size != self.config.page_size {
-            // create a new segment
-            segment = FileSegment::create_new(
-                self.config.location.clone(),
-                segment.header.segment_id.wrapping_add(1),
-                self.config.page_size,
-            )?;
-            // add the new segment to the list
-            self.meta.segments.push_back(SizeEntry {
-                file_id: segment.header.segment_id,
-                page_size: segment.header.page_size,
-                file_size: PAGE_MULTIPLIER,
-            });
-            self.meta.dirty = true;
-            self.meta.sync()?;
-        }
-        Ok(segment)
     }
 }
 

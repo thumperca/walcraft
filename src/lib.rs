@@ -76,6 +76,7 @@ impl Size {
     }
 }
 
+#[derive(Clone)]
 struct WalConfig2 {
     /// location on directory where files shall be store
     location: PathBuf,

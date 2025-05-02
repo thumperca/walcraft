@@ -139,8 +139,8 @@ impl FileSegment {
     }
 
     /// Add a new log to file segment
-    pub fn append(&mut self, data: &[u8]) -> Result<(), WalError> {
-        // First page of segment
+    pub fn append(&mut self, data: &[u8]) -> bool {
+        // First page of the segment
         if self.header.num_pages == 0 {
             let page = self.new_page();
             self.pages.push_back(page);
@@ -152,25 +152,24 @@ impl FileSegment {
             .copy_from_slice(&data.len().to_le_bytes()[..self.header.length_prefix]);
         entry[self.header.length_prefix..].copy_from_slice(data);
 
-        // add entry to latest page and return if success
+        // add entry to the latest page and return if success
         let page = self.pages.back_mut().unwrap();
         if page.add(&entry) {
             self.is_dirty = true;
-            return Ok(());
+            return true;
         }
 
         // Failed to add to existing page
-        // check if segment is filled
+        // check if the segment is filled
         if self.header.num_pages == u32::MAX {
-            return Err(WalError::SegmentFull);
+            return false;
         }
 
         // write to a new page
         let mut page = self.new_page();
         page.add(&entry);
         self.pages.push_back(page);
-
-        Ok(())
+        true
     }
 
     fn new_page(&mut self) -> Page {
@@ -185,11 +184,16 @@ impl FileSegment {
         PageIterator::new(self)
     }
 
+    pub fn is_dirty(&self) -> bool {
+        self.is_dirty
+    }
+
     /// Flush all in-memory changes to IO
     pub fn flush(&mut self) -> Result<(), WalError> {
         if self.is_dirty {
             self.sync_header()?;
             self.sync_pages()?;
+            self.is_dirty = false;
         }
         Ok(())
     }
@@ -288,8 +292,8 @@ mod tests {
         // fixtures
         create_test_dir();
         let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
-        segment.append(b"John Doe").expect("Failed to append data");
-        segment.append(b"Jane Doe").expect("Failed to append data");
+        assert!(segment.append(b"John Doe"));
+        assert!(segment.append(b"Jane Doe"));
         segment.flush().unwrap();
         drop(segment);
         let path = FileSegment::get_path(TESTING_DIR, 1);
@@ -306,8 +310,8 @@ mod tests {
         // fixtures
         create_test_dir();
         let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
-        segment.append(b"John Doe").expect("Failed to append data");
-        segment.append(b"Jane Doe").expect("Failed to append data");
+        assert!(segment.append(b"John Doe"));
+        assert!(segment.append(b"Jane Doe"));
         segment.flush().unwrap();
         drop(segment);
         let path = FileSegment::get_path(TESTING_DIR, 1);
@@ -325,9 +329,7 @@ mod tests {
         create_test_dir();
         let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4 * 1024).unwrap();
         for i in 0..=1_000 {
-            segment
-                .append(format!("Record number {}", i).as_bytes())
-                .expect("Failed to append data");
+            assert!(segment.append(format!("Record number {}", i).as_bytes()));
         }
         segment.flush().unwrap();
         drop(segment);

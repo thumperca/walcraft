@@ -16,6 +16,7 @@ pub(crate) struct Meta {
     pub(crate) dirty: bool,
     #[serde(skip)]
     location: PathBuf,
+    pub(crate) init: bool,
     pub(crate) current_pointer: u32,
     pub(crate) segments: VecDeque<SizeEntry>,
 }
@@ -25,8 +26,9 @@ impl Meta {
         let path = Self::path(path);
         Self {
             dirty: true,
+            init: false,
             location: path,
-            current_pointer: 1,
+            current_pointer: 0,
             segments: VecDeque::new(),
         }
     }
@@ -76,6 +78,7 @@ fn it_works() {
     // create a new file
     let mut meta = Meta {
         dirty: true,
+        init: true,
         location: Meta::path(path),
         current_pointer: 101,
         segments: VecDeque::from([
