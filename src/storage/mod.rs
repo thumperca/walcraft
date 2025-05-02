@@ -1,10 +1,11 @@
+mod factory;
 mod meta;
 mod segment;
 
+use self::factory::StorageFactory;
 use self::meta::Meta;
 use self::segment::FileSegment;
 use crate::error::WalError;
-use crate::storage::meta::MetaError;
 use crate::WalConfig2;
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -24,13 +25,7 @@ struct Storage {
 
 impl Storage {
     pub fn new(config: WalConfig2) -> Result<Self, WalError> {
-        let meta = Self::read_meta(&config.location).map_err(|_| WalError::MetaFileError)?;
-        let mut storage = Self {
-            config,
-            meta,
-            segments: VecDeque::new(),
-        };
-        storage.init()?;
+        let storage = StorageFactory::new(config)?;
         Ok(storage)
     }
 
@@ -41,11 +36,11 @@ impl Storage {
     }
 
     /// Read the metadata file from the disk
-    fn read_meta(path: &PathBuf) -> Result<Meta, MetaError> {
+    fn read_meta(path: &PathBuf) -> Result<Meta, WalError> {
         let path = Self::meta_path(path);
         // create a default object for the first run
         if !path.exists() {
-            return Ok(Meta::default());
+            return Ok(Meta::new(&path));
         }
         // read from the file
         Meta::read_from_file(path)
@@ -53,14 +48,13 @@ impl Storage {
 
     /// Initialize the storage layer
     ///
-    /// This process performs two tasks:
-    /// 1. Runs garbage collection
-    /// 2. Loads a segment file in memory for future writes
-    ///     - This is done by reading the last segment file if space is left in the last file
-    ///     - It creates a new file segment if the last file is full, no file exists,
-    ///       or the page size is different from the last file
-    ///  
+    /// This process performs 3 tasks:
+    /// - Ensures the size of the last segment is accurate
+    /// - Runs garbage collection
+    /// - Load a segment file in memory for future writes
+    ///
     fn init(&mut self) -> Result<(), WalError> {
+        // self.sync_meta()?;
         self.gc()?;
         self.load_segment()?;
         Ok(())
@@ -82,7 +76,7 @@ impl Storage {
                 Some(segment) => segment,
                 None => break,
             };
-            let path = FileSegment::get_path(&self.config.location, segment.file_id as usize);
+            let path = FileSegment::get_path(&self.config.location, segment.file_id);
             std::fs::remove_file(path).map_err(|_| WalError::GcFailure)?;
             size_used -= segment.file_size;
             if size_used <= self.config.size {
@@ -90,14 +84,30 @@ impl Storage {
             }
         }
         // update meta file
-        let path = Self::meta_path(&self.config.location);
-        self.meta
-            .write_to_file(path)
-            .map_err(|_| WalError::MetaFileError)?;
+        self.meta.sync().map_err(|_| WalError::MetaFileError)?;
         Ok(())
     }
 
+    /// Load a segment file into memory for writing
+    ///
+    /// This is done by reading the last segment file if space is left in the last file.
+    /// It creates a new file segment if the last file is full, no file exists, or
+    /// the page size is different from the last file.
+    ///
     fn load_segment(&mut self) -> Result<(), WalError> {
+        match self.meta.segments.back() {
+            Some(segment) => {
+                // check if the last segment is full
+                if segment.file_size >= self.config.size {
+                    return Ok(());
+                }
+                // check if the page size is different
+                if segment.page_size != self.config.page_size {
+                    return Ok(());
+                }
+            }
+            None => {}
+        }
         todo!()
     }
 }
@@ -113,7 +123,7 @@ mod tests {
             location: PathBuf::from(TESTING_DIR),
             size: usize::MAX,
             fsync: false,
-            page_size: 1024,
+            page_size: 4096,
             sync_interval: 0,
         };
         let storage = Storage::new(config);

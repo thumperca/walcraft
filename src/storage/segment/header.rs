@@ -1,5 +1,5 @@
-pub(crate) const HEADER_SIZE: usize = 4096;
 use crate::error::WalError;
+use crate::PAGE_MULTIPLIER;
 
 /// Header for heap file that stores metadata on the file
 ///
@@ -9,7 +9,7 @@ pub(crate) struct Header {
     /// Version of WAL file
     version: usize,
     /// Identifier for the file segment
-    pub segment_id: usize,
+    pub segment_id: u32,
     /// Size of a single page in bytes
     pub page_size: usize,
     /// Number of pages in the segment
@@ -23,7 +23,7 @@ pub(crate) struct Header {
 
 impl Header {
     /// Creates a new header
-    pub(crate) fn new(segment_id: usize, page_size: usize) -> Self {
+    pub(crate) fn new(segment_id: u32, page_size: usize) -> Self {
         Header {
             version: crate::WAL_VERSION,
             segment_id,
@@ -47,17 +47,17 @@ impl Header {
     }
 
     /// Serializes the header to a byte array
-    pub(crate) fn as_bytes(&self) -> [u8; HEADER_SIZE] {
-        let mut data = [0; HEADER_SIZE];
+    pub(crate) fn as_bytes(&self) -> [u8; PAGE_MULTIPLIER] {
+        let mut data = [0; PAGE_MULTIPLIER];
 
         // write the header signature
         data[0..4].copy_from_slice("HEAD".as_bytes());
 
         // write data
         data[4..12].copy_from_slice(&self.version.to_le_bytes());
-        data[12..20].copy_from_slice(&self.segment_id.to_le_bytes());
-        data[20..28].copy_from_slice(&self.page_size.to_le_bytes());
-        data[28..32].copy_from_slice(&self.num_pages.to_le_bytes());
+        data[12..16].copy_from_slice(&self.segment_id.to_le_bytes());
+        data[16..24].copy_from_slice(&self.page_size.to_le_bytes());
+        data[24..28].copy_from_slice(&self.num_pages.to_le_bytes());
 
         data
     }
@@ -68,8 +68,8 @@ impl TryFrom<&[u8]> for Header {
     type Error = WalError;
 
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-        // header shall be at least 32 bytes long
-        if data.len() < 32 {
+        // the header shall be at least 28 bytes long
+        if data.len() < 28 {
             return Err(WalError::InvalidLength);
         }
 
@@ -81,9 +81,9 @@ impl TryFrom<&[u8]> for Header {
 
         // read the data
         let version = usize::from_le_bytes(data[4..12].try_into().unwrap());
-        let segment_id = usize::from_le_bytes(data[12..20].try_into().unwrap());
-        let page_size = usize::from_le_bytes(data[20..28].try_into().unwrap());
-        let num_pages = u32::from_le_bytes(data[28..32].try_into().unwrap());
+        let segment_id = u32::from_le_bytes(data[12..16].try_into().unwrap());
+        let page_size = usize::from_le_bytes(data[16..24].try_into().unwrap());
+        let num_pages = u32::from_le_bytes(data[24..28].try_into().unwrap());
 
         Ok(Header {
             version,
