@@ -24,7 +24,7 @@ impl Meta {
     pub(crate) fn new<P: AsRef<Path>>(path: P) -> Self {
         let path = Self::path(path);
         Self {
-            dirty: false,
+            dirty: true,
             location: path,
             current_pointer: 1,
             segments: VecDeque::new(),
@@ -58,7 +58,7 @@ impl Meta {
             .map_err(|e| WalError::IoError(format!("Failed to serialize metadata: {}", e)))?;
         let contents = format!("{}{}", WARNING, contents);
         std::fs::write(&self.location, contents)
-            .map_err(|e| WalError::IoError(format!("Failed to write metadata to IO {}", e)))?;
+            .map_err(|e| WalError::IoError(format!("Failed to write metadata to IO: {}", e)))?;
         self.dirty = false;
         Ok(())
     }
