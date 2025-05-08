@@ -1,4 +1,5 @@
 use crate::error::WalError;
+use crate::PAGE_MULTIPLIER;
 
 /// A page is simply a fixed-size block of bytes that the WAL uses as its basic unit of I/O.
 ///
@@ -109,14 +110,19 @@ impl TryFrom<&[u8]> for Page {
     type Error = WalError;
 
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-        if data.len() < 16 {
-            return Err(WalError::InvalidLength);
+        if data.len() < PAGE_MULTIPLIER {
+            return Err(WalError::DeserializeError(format!(
+                "The page is too short at {}",
+                data.len()
+            )));
         }
 
         // ensure the first 4 bytes are "PAGE"
         let sign = &data[0..4];
         if sign != b"PAGE" {
-            return Err(WalError::InvalidSignature);
+            return Err(WalError::DeserializeError(
+                "Invalid page signature".to_string(),
+            ));
         }
 
         // read the data

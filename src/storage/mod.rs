@@ -45,7 +45,7 @@ impl Storage {
         // write to the new segment
         let segment = self.segments.back_mut().unwrap();
         if !segment.append(data) {
-            return Err(WalError::SegmentFull);
+            unreachable!("Failed to write data to a new segment");
         }
         Ok(())
     }
@@ -131,14 +131,20 @@ impl Storage {
                 None => break,
             };
             let path = FileSegment::get_path(&self.config.location, segment.file_id);
-            std::fs::remove_file(path).map_err(|_| WalError::GcFailure)?;
+            std::fs::remove_file(path).map_err(|e| {
+                WalError::IoError(format!(
+                    "Failed to delete old log file {}: {}",
+                    segment.file_id,
+                    e.to_string()
+                ))
+            })?;
             size_used -= segment.file_size;
             if size_used <= self.config.size {
                 break;
             }
         }
         // update meta file
-        self.meta.sync().map_err(|_| WalError::MetaFileError)?;
+        self.meta.sync()?;
         Ok(())
     }
 }

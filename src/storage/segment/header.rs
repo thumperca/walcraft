@@ -70,13 +70,16 @@ impl TryFrom<&[u8]> for Header {
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
         // the header shall be at least 28 bytes long
         if data.len() < 28 {
-            return Err(WalError::InvalidLength);
+            return Err(WalError::DeserializeError(format!(
+                "The header is too short at {}",
+                data.len()
+            )));
         }
 
         // ensure the first 4 bytes are "HEAD"
         let sign = &data[0..4];
         if sign != "HEAD".as_bytes() {
-            return Err(WalError::InvalidSignature);
+            return Err(WalError::DeserializeError("Invalid header signature".to_string()));
         }
 
         // read the data

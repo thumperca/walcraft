@@ -235,10 +235,10 @@ impl FileSegment {
             let offset = PAGE_MULTIPLIER + (page.id as usize - 1) * self.header.page_size;
             self.file
                 .seek(SeekFrom::Start(offset as u64))
-                .map_err(|_| WalError::SeekFailure)?;
+                .map_err(|e| WalError::IoError(e.to_string()))?;
             self.file
                 .write_all(&page.as_bytes())
-                .map_err(|_| WalError::WriteFailure)?;
+                .map_err(|e| WalError::IoError(e.to_string()))?;
             page.is_dirty = false;
         }
         // remove all but latest page from memory
