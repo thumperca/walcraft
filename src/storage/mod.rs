@@ -9,6 +9,7 @@ use crate::error::WalError;
 use crate::storage::meta::SizeEntry;
 use crate::{WalConfig2, PAGE_MULTIPLIER};
 use std::collections::VecDeque;
+use std::io::ErrorKind;
 
 /// Storage manager for the WAL
 ///
@@ -62,7 +63,10 @@ impl Storage {
             let segment = self.segments.pop_front().unwrap();
             self.meta.update(&segment);
         }
+        let segment = self.segments.front().unwrap();
+        self.meta.update(segment);
         // run garbage collection on disk
+        self.meta.sync()?;
         self.gc()
     }
 
@@ -133,13 +137,19 @@ impl Storage {
                 None => break,
             };
             let path = FileSegment::get_path(&self.config.location, segment.file_id);
-            std::fs::remove_file(path).map_err(|e| {
-                WalError::IoError(format!(
-                    "Failed to delete old log file {}: {}",
-                    segment.file_id,
-                    e.to_string()
-                ))
-            })?;
+            if let Err(e) = std::fs::remove_file(path) {
+                match e.kind() {
+                    ErrorKind::NotFound => {}
+                    _ => {
+                        return Err(WalError::IoError(format!(
+                            "Failed to delete old log file {}: {} {}",
+                            segment.file_id,
+                            e.to_string(),
+                            e.kind()
+                        )));
+                    }
+                }
+            };
             size_used -= segment.file_size;
             if size_used <= self.config.size {
                 break;
@@ -204,15 +214,14 @@ mod tests {
         clean_test_dir();
         let config = WalConfig2 {
             location: PathBuf::from(TESTING_DIR),
-            size: PAGE_MULTIPLIER * 2,
+            size: 4096 * 10, // 40 KB
             fsync: false,
             page_size: 4096,
             sync_interval: 100,
         };
-        println!("Config: {:?}", config.max_file_size());
         let mut storage = Storage::new(config).unwrap();
         // write a lot of data
-        for i in 0..2000 {
+        for i in 0..1000 {
             let data = format!("Hello, world! {}", i); // 18 bytes
             storage.append(data.as_bytes()).unwrap();
         }
@@ -220,7 +229,23 @@ mod tests {
     }
 
     #[test]
-    fn garbage_collection() {}
+    fn garbage_collection() {
+        clean_test_dir();
+        let config = WalConfig2 {
+            location: PathBuf::from(TESTING_DIR),
+            size: 4096 * 10, // 40 KB
+            fsync: false,
+            page_size: 4096,
+            sync_interval: 100,
+        };
+        let mut storage = Storage::new(config).unwrap();
+        // write a lot of data
+        for i in 0..1000 {
+            let data = format!("Hello, world! {}", i); // 18 bytes
+            storage.append(data.as_bytes()).unwrap();
+        }
+        storage.flush().unwrap();
+    }
 
     #[test]
     fn wrapping_garbage_collection() {}

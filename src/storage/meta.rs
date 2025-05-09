@@ -37,18 +37,22 @@ impl Meta {
 
     /// Update the segments metadata
     pub(crate) fn update(&mut self, segment: &FileSegment) {
+        let mut found = false;
         for entry in &mut self.segments {
             if entry.file_id == segment.header.segment_id {
                 entry.file_size = segment.len();
                 self.dirty = true;
+                found = true;
                 break;
             }
         }
-        self.segments.push_back(SizeEntry {
-            file_id: segment.header.segment_id,
-            page_size: segment.header.page_size,
-            file_size: segment.len(),
-        });
+        if !found {
+            self.segments.push_back(SizeEntry {
+                file_id: segment.header.segment_id,
+                page_size: segment.header.page_size,
+                file_size: segment.len(),
+            });
+        }
     }
 }
 
