@@ -252,21 +252,13 @@ impl FileSegment {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::clean_test_dir;
     use crate::TESTING_DIR;
-
-    // utility function to re-create test dir for each test
-    pub fn create_test_dir() {
-        std::fs::remove_dir_all(TESTING_DIR).unwrap();
-        std::fs::create_dir_all(TESTING_DIR).unwrap();
-        let mut path = PathBuf::from(TESTING_DIR);
-        path.push("logs");
-        std::fs::create_dir_all(path).unwrap();
-    }
 
     #[test]
     fn new() {
-        create_test_dir();
-        let segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
+        clean_test_dir();
+        FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
     }
 
     // test file_path logic
@@ -282,7 +274,7 @@ mod tests {
     // test to create a file segment with no data and read it back
     #[test]
     fn open_empty() {
-        create_test_dir();
+        clean_test_dir();
         let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
         segment.flush().unwrap();
         drop(segment);
@@ -294,7 +286,7 @@ mod tests {
     #[test]
     fn open_filled() {
         // fixtures
-        create_test_dir();
+        clean_test_dir();
         let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
         assert!(segment.append(b"John Doe"));
         assert!(segment.append(b"Jane Doe"));
@@ -312,7 +304,7 @@ mod tests {
     #[test]
     fn iter() {
         // fixtures
-        create_test_dir();
+        clean_test_dir();
         let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
         assert!(segment.append(b"John Doe"));
         assert!(segment.append(b"Jane Doe"));
@@ -330,7 +322,7 @@ mod tests {
     #[test]
     fn multi_page_iter() {
         // fixtures
-        create_test_dir();
+        clean_test_dir();
         let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4 * 1024).unwrap();
         for i in 0..=1_000 {
             assert!(segment.append(format!("Record number {}", i).as_bytes()));

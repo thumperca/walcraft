@@ -1,5 +1,6 @@
 use crate::error::WalError;
 use crate::storage::segment::FileSegment;
+use crate::tests::clean_test_dir;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -92,6 +93,7 @@ impl Meta {
 #[test]
 fn it_works() {
     let path = crate::TESTING_DIR;
+    clean_test_dir();
     // create a new file
     let mut meta = Meta {
         dirty: true,

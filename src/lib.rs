@@ -40,6 +40,7 @@ mod builder;
 pub(crate) mod error;
 mod iter;
 mod storage;
+pub(crate) mod tests;
 mod wal;
 pub(crate) mod writer;
 
@@ -142,7 +143,7 @@ impl Default for WalConfig {
 }
 
 #[cfg(test)]
-mod tests {
+mod lib_tests {
     use super::*;
 
     #[test]

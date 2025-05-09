@@ -54,13 +54,13 @@ impl<'a> Iterator for PageIterator<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::create_test_dir;
     use super::*;
+    use crate::tests::clean_test_dir;
     use crate::TESTING_DIR;
 
     #[test]
     fn it_works() {
-        create_test_dir();
+        clean_test_dir();
         // Add some data to the segment
         let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
         assert!(segment.append(b"Hello"));
