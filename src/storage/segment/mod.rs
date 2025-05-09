@@ -23,6 +23,7 @@ pub(crate) struct FileSegment {
     pages: VecDeque<Page>,
     file: File,
     is_dirty: bool,
+    max_size: usize,
 }
 
 impl FileSegment {
@@ -33,6 +34,7 @@ impl FileSegment {
         base_dir: P,
         segment_id: u32,
         page_size: usize,
+        max_size: usize,
     ) -> Result<Self, WalError> {
         assert_eq!(page_size % 4096, 0);
 
@@ -53,6 +55,7 @@ impl FileSegment {
             pages: VecDeque::new(),
             file,
             is_dirty: true,
+            max_size,
         })
     }
 
@@ -66,7 +69,7 @@ impl FileSegment {
     }
 
     /// Opens an existing file and load it's latest page in memory
-    pub fn open_existing<P: AsRef<Path>>(path: P) -> Result<Self, WalError> {
+    pub fn open_existing<P: AsRef<Path>>(path: P, max_size: usize) -> Result<Self, WalError> {
         let mut file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -86,6 +89,7 @@ impl FileSegment {
             pages: VecDeque::new(),
             file,
             is_dirty: false,
+            max_size,
         };
 
         // ensure the file size is correct
@@ -160,7 +164,7 @@ impl FileSegment {
 
         // Failed to add to existing page
         // check if the segment is filled
-        if self.header.num_pages == u32::MAX {
+        if self.len() + self.header.page_size > self.max_size {
             return false;
         }
 
@@ -258,7 +262,7 @@ mod tests {
     #[test]
     fn new() {
         clean_test_dir();
-        FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
+        FileSegment::create_new(TESTING_DIR, 1, PAGE_MULTIPLIER, PAGE_MULTIPLIER * 100).unwrap();
     }
 
     // test file_path logic
@@ -275,11 +279,14 @@ mod tests {
     #[test]
     fn open_empty() {
         clean_test_dir();
-        let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
+        let mut segment =
+            FileSegment::create_new(TESTING_DIR, 1, PAGE_MULTIPLIER, PAGE_MULTIPLIER * 100)
+                .unwrap();
         segment.flush().unwrap();
         drop(segment);
         let path = FileSegment::get_path(TESTING_DIR, 1);
-        let segment = FileSegment::open_existing(path.to_str().unwrap()).unwrap();
+        let segment =
+            FileSegment::open_existing(path.to_str().unwrap(), PAGE_MULTIPLIER * 100).unwrap();
     }
 
     // test to create a file segment with some data and read it back
@@ -287,14 +294,17 @@ mod tests {
     fn open_filled() {
         // fixtures
         clean_test_dir();
-        let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
+        let mut segment =
+            FileSegment::create_new(TESTING_DIR, 1, PAGE_MULTIPLIER, PAGE_MULTIPLIER * 100)
+                .unwrap();
         assert!(segment.append(b"John Doe"));
         assert!(segment.append(b"Jane Doe"));
         segment.flush().unwrap();
         drop(segment);
         let path = FileSegment::get_path(TESTING_DIR, 1);
         // read data
-        let mut segment = FileSegment::open_existing(path.to_str().unwrap()).unwrap();
+        let mut segment =
+            FileSegment::open_existing(path.to_str().unwrap(), PAGE_MULTIPLIER * 100).unwrap();
         let data = segment.read_page_entries(1).unwrap();
         assert_eq!(data.len(), 2);
         assert_eq!(data[0], b"John Doe");
@@ -305,14 +315,17 @@ mod tests {
     fn iter() {
         // fixtures
         clean_test_dir();
-        let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
+        let mut segment =
+            FileSegment::create_new(TESTING_DIR, 1, PAGE_MULTIPLIER, PAGE_MULTIPLIER * 100)
+                .unwrap();
         assert!(segment.append(b"John Doe"));
         assert!(segment.append(b"Jane Doe"));
         segment.flush().unwrap();
         drop(segment);
         let path = FileSegment::get_path(TESTING_DIR, 1);
         // read data
-        let mut segment = FileSegment::open_existing(path.to_str().unwrap()).unwrap();
+        let mut segment =
+            FileSegment::open_existing(path.to_str().unwrap(), PAGE_MULTIPLIER * 100).unwrap();
         let items = segment.iter().collect::<Vec<_>>();
         assert_eq!(items.len(), 2);
         assert_eq!(items[0], b"John Doe");
@@ -323,7 +336,9 @@ mod tests {
     fn multi_page_iter() {
         // fixtures
         clean_test_dir();
-        let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4 * 1024).unwrap();
+        let mut segment =
+            FileSegment::create_new(TESTING_DIR, 1, PAGE_MULTIPLIER, PAGE_MULTIPLIER * 100)
+                .unwrap();
         for i in 0..=1_000 {
             assert!(segment.append(format!("Record number {}", i).as_bytes()));
         }
@@ -331,7 +346,8 @@ mod tests {
         drop(segment);
         let path = FileSegment::get_path(TESTING_DIR, 1);
         // read data
-        let mut segment = FileSegment::open_existing(path.to_str().unwrap()).unwrap();
+        let mut segment =
+            FileSegment::open_existing(path.to_str().unwrap(), PAGE_MULTIPLIER * 100).unwrap();
         let items = segment.iter().collect::<Vec<_>>();
         assert_eq!(items.len(), 1_001);
         assert_eq!(&items[0], &b"Record number 0");

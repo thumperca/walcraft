@@ -56,20 +56,23 @@ impl<'a> Iterator for PageIterator<'a> {
 mod tests {
     use super::*;
     use crate::tests::clean_test_dir;
-    use crate::TESTING_DIR;
+    use crate::{PAGE_MULTIPLIER, TESTING_DIR};
 
     #[test]
     fn it_works() {
         clean_test_dir();
         // Add some data to the segment
-        let mut segment = FileSegment::create_new(TESTING_DIR, 1, 4096).unwrap();
+        let mut segment =
+            FileSegment::create_new(TESTING_DIR, 1, PAGE_MULTIPLIER, PAGE_MULTIPLIER * 100)
+                .unwrap();
         assert!(segment.append(b"Hello"));
         assert!(segment.append(b"World"));
         segment.flush().unwrap();
         drop(segment);
         // open segment
         let path = FileSegment::get_path(TESTING_DIR, 1);
-        let mut segment = FileSegment::open_existing(path.to_str().unwrap()).unwrap();
+        let mut segment =
+            FileSegment::open_existing(path.to_str().unwrap(), PAGE_MULTIPLIER * 100).unwrap();
         // Iterate over the pages
         let mut iterator = PageIterator::new(&mut segment).collect::<Vec<_>>();
         assert_eq!(iterator.len(), 2);

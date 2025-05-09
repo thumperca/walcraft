@@ -72,8 +72,6 @@ impl Storage {
     /// It creates a new file segment if the last file is full, no file exists, or
     /// the page size is different from the last file.
     ///
-    /// Todo: load segment needs to run very fast without actual disk sync
-    ///
     fn load_segment(&mut self) -> Result<(), WalError> {
         // first init
         if !self.meta.init {
@@ -82,7 +80,7 @@ impl Storage {
         // read the current segment
         let current_file = self.meta.current_pointer;
         let path = FileSegment::get_path(&self.config.location, current_file);
-        let segment = FileSegment::open_existing(path)?;
+        let segment = FileSegment::open_existing(path, self.config.max_file_size())?;
         // check segment's page_size and total file size
         let page_full = segment.len() >= self.config.max_file_size();
         let page_size_mismatch = segment.header.page_size != self.config.page_size;
@@ -99,8 +97,12 @@ impl Storage {
             new_id = 1;
         }
         // create a new segment
-        let segment =
-            FileSegment::create_new(self.config.location.clone(), new_id, self.config.page_size)?;
+        let segment = FileSegment::create_new(
+            self.config.location.clone(),
+            new_id,
+            self.config.page_size,
+            self.config.max_file_size(),
+        )?;
         // update metadata
         self.meta.current_pointer = new_id;
         self.meta.segments.push_back(SizeEntry {
@@ -152,19 +154,13 @@ impl Storage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::clean_test_dir;
     use crate::TESTING_DIR;
     use std::path::PathBuf;
 
-    fn cleanup() {
-        let path = PathBuf::from(TESTING_DIR);
-        if path.exists() {
-            std::fs::remove_dir_all(path).unwrap();
-        }
-    }
-
     #[test]
     fn new_instance() {
-        cleanup();
+        clean_test_dir();
         let config = WalConfig2 {
             location: PathBuf::from(TESTING_DIR),
             size: usize::MAX,
@@ -177,7 +173,7 @@ mod tests {
 
     #[test]
     fn write() {
-        cleanup();
+        clean_test_dir();
         let config = WalConfig2 {
             location: PathBuf::from(TESTING_DIR),
             size: usize::MAX,
@@ -193,15 +189,35 @@ mod tests {
         storage.flush().unwrap();
         drop(storage);
         // ensure data is there
-        let mut segment =
-            FileSegment::open_existing(FileSegment::get_path(&config.location, 1)).unwrap();
+        let mut segment = FileSegment::open_existing(
+            FileSegment::get_path(&config.location, 1),
+            config.max_file_size(),
+        )
+        .unwrap();
         let data = segment.iter().collect::<Vec<_>>();
         assert_eq!(data.len(), 3);
         assert_eq!(data[1], b"Hello, Rust!");
     }
 
     #[test]
-    fn multiple_files() {}
+    fn multiple_files() {
+        clean_test_dir();
+        let config = WalConfig2 {
+            location: PathBuf::from(TESTING_DIR),
+            size: PAGE_MULTIPLIER * 2,
+            fsync: false,
+            page_size: 4096,
+            sync_interval: 100,
+        };
+        println!("Config: {:?}", config.max_file_size());
+        let mut storage = Storage::new(config).unwrap();
+        // write a lot of data
+        for i in 0..2000 {
+            let data = format!("Hello, world! {}", i); // 18 bytes
+            storage.append(data.as_bytes()).unwrap();
+        }
+        storage.flush().unwrap();
+    }
 
     #[test]
     fn garbage_collection() {}
