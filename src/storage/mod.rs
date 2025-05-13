@@ -252,6 +252,58 @@ mod tests {
         storage.flush().unwrap();
     }
 
+    fn setup_data(config: &WalConfig2, pointer: u32) {
+        // create a metadata file
+        let mut meta = Meta {
+            dirty: true,
+            init: true,
+            location: Meta::path(TESTING_DIR),
+            current_pointer: pointer,
+            segments: VecDeque::from([SizeEntry {
+                file_id: pointer,
+                page_size: 4096,
+                file_size: 4096,
+            }]),
+        };
+        meta.sync().expect("Failed to sync meta to disk");
+        // create a segment file to prevent file access error
+        let mut segment = FileSegment::create_new(
+            PathBuf::from(TESTING_DIR),
+            u32::MAX - 2,
+            config.page_size,
+            config.max_file_size(),
+        )
+        .expect("Failed to create new segment");
+        segment.is_dirty = true;
+        segment.flush().expect("Failed to flush segment");
+    }
+
     #[test]
-    fn wrapping_garbage_collection() {}
+    fn wrapping_garbage_collection() {
+        clean_test_dir();
+        // fixtures
+        let current_pointer = u32::MAX - 2;
+        let config = WalConfig2 {
+            location: PathBuf::from(TESTING_DIR),
+            size: 4096 * 10, // 40 KB
+            fsync: false,
+            page_size: 4096,
+            sync_interval: 100,
+        };
+        setup_data(&config, current_pointer);
+        // create a new storage instance and write data
+        let mut storage = Storage::new(config).expect("Failed to create storage");
+        for i in 0..2000 {
+            let data = format!("Hello, world! {}", i); // 18 bytes
+            storage.append(data.as_bytes()).unwrap();
+        }
+        storage.flush().unwrap();
+        // test for wrapping add
+        let meta = storage.meta;
+        assert_eq!(meta.current_pointer, 1);
+        assert_eq!(meta.segments.len(), 3);
+        assert_eq!(meta.segments[0].file_id, u32::MAX - 1);
+        assert_eq!(meta.segments[1].file_id, u32::MAX);
+        assert_eq!(meta.segments[2].file_id, 1);
+    }
 }

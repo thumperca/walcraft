@@ -17,7 +17,7 @@ pub(crate) struct Meta {
     #[serde(skip)]
     pub(crate) dirty: bool,
     #[serde(skip)]
-    location: PathBuf,
+    pub(crate) location: PathBuf,
     pub(crate) init: bool,
     pub(crate) current_pointer: u32,
     pub(crate) segments: VecDeque<SizeEntry>,
@@ -56,7 +56,7 @@ impl Meta {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub(crate) struct SizeEntry {
     pub(crate) file_id: u32,
     pub(crate) page_size: usize, // todo: delete this field if unused

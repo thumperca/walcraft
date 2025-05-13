@@ -22,7 +22,7 @@ pub(crate) struct FileSegment {
     pub(crate) header: Header,
     pages: VecDeque<Page>,
     file: File,
-    is_dirty: bool,
+    pub(crate) is_dirty: bool,
     max_size: usize,
 }
 
