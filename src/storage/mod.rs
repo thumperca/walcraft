@@ -98,6 +98,10 @@ impl Storage {
 
     fn next_segment(&mut self) -> Result<(), WalError> {
         let mut new_id = self.meta.current_pointer.wrapping_add(1);
+        if new_id == 0 {
+            // wrap around
+            new_id = 1;
+        }
         if !self.meta.init {
             new_id = 1;
         }
