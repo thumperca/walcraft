@@ -133,7 +133,7 @@ impl Storage {
         }
         // WAL size is over the limit; remove the oldest segments
         loop {
-            let segment = match self.meta.segments.front() {
+            let segment = match self.meta.segments.pop_front() {
                 Some(segment) => segment,
                 None => break,
             };
