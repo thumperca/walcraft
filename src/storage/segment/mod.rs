@@ -73,8 +73,14 @@ impl FileSegment {
         let mut file = OpenOptions::new()
             .read(true)
             .write(true)
-            .open(path)
-            .map_err(|e| WalError::IoError(format!("Failed to open log file: {}", e)))?;
+            .open(&path)
+            .map_err(|e| {
+                WalError::IoError(format!(
+                    "Failed to open log file ERR_OPEN_77: {} - {:?}",
+                    e,
+                    path.as_ref()
+                ))
+            })?;
         let metadata = file.metadata().map_err(|e| {
             WalError::IoError(format!("Failed to get metadata for log file: {}", e))
         })?;
