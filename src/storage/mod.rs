@@ -92,6 +92,7 @@ impl Storage {
         if page_full || page_size_mismatch {
             return self.next_segment();
         }
+        self.segments.push_back(segment);
         Ok(())
     }
 
