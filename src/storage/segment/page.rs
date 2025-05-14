@@ -111,7 +111,7 @@ impl TryFrom<&[u8]> for Page {
 
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
         if data.len() < PAGE_MULTIPLIER {
-            return Err(WalError::DeserializeError(format!(
+            return Err(WalError::DeserializationError(format!(
                 "The page is too short at {}",
                 data.len()
             )));
@@ -120,7 +120,7 @@ impl TryFrom<&[u8]> for Page {
         // ensure the first 4 bytes are "PAGE"
         let sign = &data[0..4];
         if sign != b"PAGE" {
-            return Err(WalError::DeserializeError(
+            return Err(WalError::DeserializationError(
                 "Invalid page signature".to_string(),
             ));
         }

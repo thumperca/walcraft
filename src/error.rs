@@ -1,5 +1,8 @@
 #[derive(Debug)]
 pub enum WalError {
+    ConfigError(String),
     IoError(String),
-    DeserializeError(String),
+    LockError(String),
+    SerializationError(String),
+    DeserializationError(String),
 }

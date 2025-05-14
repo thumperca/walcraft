@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-const TESTING_DIR: &str = "./tmp/testing";
+pub(crate) const TESTING_DIR: &str = "./tmp/testing";
 
 /// Utility function to remove the testing directory and create a new blank one for a new test
 pub(crate) fn clean_test_dir() {

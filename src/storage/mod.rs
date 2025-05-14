@@ -1,6 +1,6 @@
 mod factory;
-mod iterator;
-mod meta;
+pub(crate) mod iterator;
+pub(crate) mod meta;
 mod segment;
 
 use self::factory::StorageFactory;
@@ -8,7 +8,7 @@ use self::meta::Meta;
 use self::segment::FileSegment;
 use crate::error::WalError;
 use crate::storage::meta::SizeEntry;
-use crate::{WalConfig2, PAGE_MULTIPLIER};
+use crate::{WalConfig, PAGE_MULTIPLIER};
 use std::collections::VecDeque;
 use std::io::ErrorKind;
 
@@ -19,14 +19,14 @@ use std::io::ErrorKind;
 /// - Writing data to IO
 /// - Garbage Collection
 ///
-struct Storage {
-    config: WalConfig2,
-    meta: Meta,
+pub(crate) struct Storage {
+    config: WalConfig,
+    pub(crate) meta: Meta,
     segments: VecDeque<FileSegment>,
 }
 
 impl Storage {
-    pub fn new(config: WalConfig2) -> Result<Self, WalError> {
+    pub fn new(config: WalConfig) -> Result<Self, WalError> {
         let storage = StorageFactory::new(config)?;
         Ok(storage)
     }
@@ -178,7 +178,7 @@ mod tests {
     #[test]
     fn new_instance() {
         clean_test_dir();
-        let config = WalConfig2 {
+        let config = WalConfig {
             location: PathBuf::from(TESTING_DIR),
             size: usize::MAX,
             fsync: false,
@@ -191,7 +191,7 @@ mod tests {
     #[test]
     fn write() {
         clean_test_dir();
-        let config = WalConfig2 {
+        let config = WalConfig {
             location: PathBuf::from(TESTING_DIR),
             size: usize::MAX,
             fsync: false,
@@ -219,7 +219,7 @@ mod tests {
     #[test]
     fn multiple_files() {
         clean_test_dir();
-        let config = WalConfig2 {
+        let config = WalConfig {
             location: PathBuf::from(TESTING_DIR),
             size: 4096 * 10, // 40 KB
             fsync: false,
@@ -238,7 +238,7 @@ mod tests {
     #[test]
     fn garbage_collection() {
         clean_test_dir();
-        let config = WalConfig2 {
+        let config = WalConfig {
             location: PathBuf::from(TESTING_DIR),
             size: 4096 * 10, // 40 KB
             fsync: false,
@@ -254,7 +254,7 @@ mod tests {
         storage.flush().unwrap();
     }
 
-    fn setup_data(config: &WalConfig2, pointer: u32) {
+    fn setup_data(config: &WalConfig, pointer: u32) {
         // create a metadata file
         let mut meta = Meta {
             dirty: true,
@@ -285,7 +285,7 @@ mod tests {
         clean_test_dir();
         // fixtures
         let current_pointer = u32::MAX - 2;
-        let config = WalConfig2 {
+        let config = WalConfig {
             location: PathBuf::from(TESTING_DIR),
             size: 4096 * 10, // 40 KB
             fsync: false,

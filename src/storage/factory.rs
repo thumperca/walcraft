@@ -1,17 +1,17 @@
 use super::Storage;
 use crate::error::WalError;
 use crate::storage::meta::{Meta, SizeEntry};
-use crate::WalConfig2;
+use crate::WalConfig;
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 
 pub(crate) struct StorageFactory {
-    config: WalConfig2,
+    config: WalConfig,
     meta: Meta,
 }
 
 impl StorageFactory {
-    pub fn new(config: WalConfig2) -> Result<Storage, WalError> {
+    pub fn new(config: WalConfig) -> Result<Storage, WalError> {
         Self::create_dirs(config.location.clone())?;
         let meta = Self::read_meta(&config.location)?;
         let mut factory = Self { meta, config };
@@ -160,6 +160,7 @@ impl StorageFactory {
     }
 }
 
+// todo: empty test cases
 #[cfg(test)]
 mod tests {
     use super::*;

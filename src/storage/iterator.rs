@@ -2,7 +2,7 @@ use super::meta::Meta;
 use super::segment::iterator::PageIterator;
 use crate::storage::segment::FileSegment;
 
-struct WalIterator {
+pub(crate) struct WalIterator {
     meta: Meta,
     pointer: usize,
     iterator: Option<PageIterator>,
@@ -58,13 +58,13 @@ mod tests {
     use super::*;
     use crate::storage::Storage;
     use crate::tests::clean_test_dir;
-    use crate::{WalConfig2, PAGE_MULTIPLIER, TESTING_DIR};
+    use crate::{WalConfig, PAGE_MULTIPLIER, TESTING_DIR};
 
     #[test]
     fn it_works() {
         clean_test_dir();
         // write data
-        let config = WalConfig2 {
+        let config = WalConfig {
             location: TESTING_DIR.into(),
             size: PAGE_MULTIPLIER * 10,
             fsync: false,
@@ -92,7 +92,7 @@ mod tests {
     fn many_files_with_gc() {
         clean_test_dir();
         // write data
-        let config = WalConfig2 {
+        let config = WalConfig {
             location: TESTING_DIR.into(),
             size: PAGE_MULTIPLIER * 10,
             fsync: false,

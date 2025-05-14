@@ -18,115 +18,104 @@
 //! }
 //!
 //! // create an instance of WAL
-//! let wal = Wal::new("/tmp/logz", Some(2000));
+//! let wal = Wal::new("/tmp/logz", Some(2000)).unwrap();
 //!
 //! // recovery: Option A
-//! let all_logs = wal.read().unwrap().into_iter().collect::<Vec<Log> > ();
+//! let all_logs = wal.iter().unwrap().collect::<Vec<_>>();
 //! // recovery: Option B
-//! for log in wal.read().unwrap() {
+//! for log in wal.iter().unwrap() {
 //!   // do something with logs
 //!   dbg!(log);
 //! }
 //!
 //! // start writing
-//! wal.write(Log{id: 1, value: 3.14});
-//! wal.write(Log{id: 2, value: 4.20});
+//! wal.append_struct(Log{id: 1, value: 3.14}).unwrap();
+//! wal.append_struct(Log{id: 2, value: 4.20}).unwrap();
 //!
 //! // Flush to disk early/manually, before the buffer is filled
-//! wal.flush();
+//! wal.flush().unwrap();
 //!```
-use crate::iter::WalIterator;
-use crate::writer::Writer;
-use crate::{WalConfig, DEFAULT_BUFFER_SIZE};
+use crate::error::WalError;
+use crate::storage::{iterator::WalIterator, meta::Meta, Storage};
+use crate::{WalConfig, PAGE_MULTIPLIER};
 use serde::{Deserialize, Serialize};
 use std::fs::remove_dir_all;
-use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub(crate) const MODE_IDLE: u8 = 0;
 const MODE_READ: u8 = 1;
 const MODE_WRITE: u8 = 2;
 
-pub(crate) struct WalInner<T>
-where
-    T: Serialize + for<'a> Deserialize<'a>,
-{
+pub(crate) struct WalInner {
     pub config: WalConfig,
     pub mode: AtomicU8,
-    pub writer: Writer,
-    _phantom: PhantomData<T>,
+    pub storage: Mutex<Storage>,
 }
 
-impl<T> WalInner<T>
-where
-    T: Serialize + for<'a> Deserialize<'a>,
-{
-    pub fn new(config: WalConfig) -> Self {
-        Self {
-            writer: Writer::new(config.clone()),
+impl WalInner {
+    pub fn new(config: WalConfig) -> Result<Self, WalError> {
+        let storage = Storage::new(config.clone())?;
+        Ok(Self {
+            storage: Mutex::new(storage),
             mode: AtomicU8::new(MODE_IDLE),
             config,
-            _phantom: PhantomData,
-        }
+        })
     }
 }
 
 #[derive(Clone)]
-pub struct Wal<T>
-where
-    T: Serialize + for<'a> Deserialize<'a>,
-{
-    pub(crate) inner: Arc<WalInner<T>>,
+pub struct Wal {
+    pub(crate) inner: Arc<WalInner>,
 }
 
-impl<T> Wal<T>
-where
-    T: Serialize + for<'a> Deserialize<'a>,
-{
+impl Wal {
     /// Create a new instance of [Wal]
     /// # Arguments
     /// - location: Location where the files shall be stored
     /// - size: Optional, maximum storage size taken by logs in MBs
-    pub fn new(location: &str, size: Option<u16>) -> Self {
+    pub fn new(location: &str, size: Option<u16>) -> Result<Self, WalError> {
         let size = size.map(|v| v as usize * 1024 * 1024).unwrap_or(usize::MAX);
         let config = WalConfig {
             location: PathBuf::from(location),
-            fsync: false,
-            buffer_size: DEFAULT_BUFFER_SIZE,
             size,
+            fsync: false,
+            page_size: PAGE_MULTIPLIER,
+            sync_interval: 250,
         };
-        let inner = WalInner::new(config);
-        Self {
+        let inner = WalInner::new(config)?;
+        Ok(Self {
             inner: Arc::new(inner),
-        }
+        })
     }
 
-    pub(crate) fn with_config(config: WalConfig) -> Self {
-        let inner = Arc::new(WalInner::new(config));
-        Self { inner }
+    pub(crate) fn with_config(config: WalConfig) -> Result<Self, WalError> {
+        let inner = WalInner::new(config)?;
+        Ok(Self {
+            inner: Arc::new(inner),
+        })
     }
 
     /// Read the logs
-    pub fn read(&self) -> Result<impl Iterator<Item = T>, String> {
+    pub fn iter(&self) -> Result<WalIterator, WalError> {
         if let Err(_) = self
             .inner
             .mode
             .compare_exchange(MODE_IDLE, MODE_READ, Relaxed, Relaxed)
         {
-            return Err("Unable to acquire read lock on WAL".to_string());
+            return Err(WalError::LockError(
+                "Unable to acquire read lock on WAL".to_string(),
+            ));
         }
-        let wal = Wal {
-            inner: self.inner.clone(),
-        };
-        let t = WalIterator::new(wal);
-        Ok(t)
+        let meta = Meta::read_from_file(&self.inner.config.location)?;
+        let iterator = WalIterator::new(meta);
+        Ok(iterator)
     }
 
     /// Write a new log
-    pub fn write(&self, item: T) {
+    pub fn append(&self, item: &[u8]) -> Result<(), WalError> {
         // ensure write mode is either ON
         // or enable it if it's not ON
         let mode = self.inner.mode.load(Relaxed);
@@ -142,15 +131,19 @@ where
                 }
             }
         }
-        // write the data
-        if let Ok(d) = bincode::serialize(&item) {
-            self.inner.writer.log(&d);
-        }
+        self.inner.storage.lock().unwrap().append(item)
+    }
+
+    pub fn append_struct<T: Serialize>(&self, item: T) -> Result<(), WalError> {
+        let item = bincode::serialize(&item).map_err(|e| {
+            WalError::SerializationError(format!("Unable to serialize struct, Error: {:?}", e))
+        })?;
+        self.append(&item)
     }
 
     /// Sync the in-memory buffer with Disk IO
-    pub fn flush(&self) {
-        self.inner.writer.flush();
+    pub fn flush(&self) -> Result<(), WalError> {
+        self.inner.storage.lock().unwrap().flush()
     }
 
     /// Delete all the stored logs... Use Carefully!
@@ -162,6 +155,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::{clean_test_dir, TESTING_DIR};
 
     #[derive(Serialize, Deserialize, Clone)]
     struct Log {
@@ -169,46 +163,44 @@ mod tests {
         name: String,
     }
 
-    const LOCATION: &str = "./tmp/testing";
-
-    // reset the folder
-    fn reset() {
-        let _ = std::fs::remove_dir_all(LOCATION);
-        std::fs::create_dir(LOCATION).unwrap();
+    fn bytes_to_log(bytes: Vec<u8>) -> Log {
+        bincode::deserialize(&bytes).unwrap()
     }
 
     #[test]
     fn read_after_write() {
-        reset();
+        clean_test_dir();
         // create a wal instance
-        let wal = Wal::new(LOCATION, Some(100));
+        let wal = Wal::new(TESTING_DIR, Some(100)).unwrap();
         // add 2 logs
-        wal.write(Log {
+        wal.append_struct(Log {
             id: 420,
             name: "Jane Doe".to_string(),
-        });
-        wal.write(Log {
+        })
+        .unwrap();
+        wal.append_struct(Log {
             id: 840,
             name: "John Doe".to_string(),
-        });
+        })
+        .unwrap();
         // ensure data is written to disk
-        wal.flush();
+        wal.flush().unwrap();
         drop(wal);
         // read it
-        let wal: Wal<Log> = Wal::new(LOCATION, Some(100));
-        let logs = wal.read();
+        let wal = Wal::new(TESTING_DIR, Some(100)).unwrap();
+        let logs = wal.iter();
         assert!(logs.is_ok());
         let mut logs = logs.unwrap();
         // check item 1
         let item = logs.next();
         assert!(item.is_some());
-        let item = item.unwrap();
+        let item = item.map(bytes_to_log).unwrap();
         assert_eq!(item.id, 420);
         assert_eq!(&item.name, "Jane Doe");
         // check item 2
         let item = logs.next();
         assert!(item.is_some());
-        let item = item.unwrap();
+        let item = item.map(bytes_to_log).unwrap();
         assert_eq!(item.id, 840);
         assert_eq!(&item.name, "John Doe");
         // no item 3
@@ -217,33 +209,45 @@ mod tests {
 
     #[test]
     fn write_after_read() {
-        reset();
+        clean_test_dir();
         // add some data
-        let wal = Wal::new(LOCATION, Some(500));
+        let wal = Wal::new(TESTING_DIR, Some(500)).unwrap();
         for i in 0..20 {
-            wal.write(Log {
+            wal.append_struct(Log {
                 id: i + 1,
                 name: "".to_string(),
             })
+            .unwrap();
         }
-        wal.flush();
+        wal.flush().unwrap();
         drop(wal);
         // read data
-        let wal = Wal::new(LOCATION, Some(500));
-        let data = wal.read().unwrap().into_iter().collect::<Vec<Log>>();
+        let wal = Wal::new(TESTING_DIR, Some(500)).unwrap();
+        let data = wal
+            .iter()
+            .unwrap()
+            .into_iter()
+            .map(bytes_to_log)
+            .collect::<Vec<Log>>();
         assert_eq!(data.len(), 20);
         // write more data
         for i in 20..25 {
-            wal.write(Log {
+            wal.append_struct(Log {
                 id: i + 1,
                 name: "".to_string(),
             })
+            .unwrap();
         }
-        wal.flush();
+        wal.flush().unwrap();
         drop(wal);
         // read to ensure everything new is also there
-        let wal = Wal::new(LOCATION, Some(500));
-        let data = wal.read().unwrap().into_iter().collect::<Vec<Log>>();
+        let wal = Wal::new(TESTING_DIR, Some(500)).unwrap();
+        let data = wal
+            .iter()
+            .unwrap()
+            .into_iter()
+            .map(bytes_to_log)
+            .collect::<Vec<Log>>();
         assert_eq!(data.len(), 25);
         assert_eq!(data.first().unwrap().id, 1);
         assert_eq!(data.last().unwrap().id, 25);

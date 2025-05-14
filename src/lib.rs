@@ -21,16 +21,17 @@
 //! let wal = Wal::new("/tmp/logz", Some(2000));
 //!
 //! // recovery: Option A
-//! let all_logs = wal.read().unwrap().into_iter().collect::<Vec<Log> > ();
+//! let all_logs = wal.iter().unwrap().collect::<Vec<Log>>();
 //! // recovery: Option B
-//! for log in wal.read().unwrap() {
+//! for log in wal.iter().unwrap() {
 //!   // do something with logs
 //!   dbg!(log);
 //! }
 //!
 //! // start writing
-//! wal.write(Log{id: 1, value: 3.14});
-//! wal.write(Log{id: 2, value: 4.20});
+//! wal.append(b"LOG_START");
+//! wal.append_struct(Log{id: 1, value: 3.14});
+//! wal.append_struct(Log{id: 2, value: 4.20});
 //!
 //! // Flush to disk early/manually, before the buffer is filled
 //! wal.flush();
@@ -38,11 +39,9 @@
 
 mod builder;
 pub(crate) mod error;
-mod iter;
 mod storage;
 pub(crate) mod tests;
 mod wal;
-pub(crate) mod writer;
 
 pub use self::builder::WalBuilder;
 pub use self::wal::Wal;
@@ -77,8 +76,9 @@ impl Size {
     }
 }
 
+/// A Data object that holds configuration for [Wal]
 #[derive(Clone)]
-struct WalConfig2 {
+struct WalConfig {
     /// location on directory where files shall be store
     location: PathBuf,
     /// maximum storage size to be taken in KBs
@@ -91,7 +91,7 @@ struct WalConfig2 {
     sync_interval: usize,
 }
 
-impl Default for WalConfig2 {
+impl Default for WalConfig {
     fn default() -> Self {
         Self {
             location: PathBuf::from("/tmp/walcraft"),
@@ -103,7 +103,7 @@ impl Default for WalConfig2 {
     }
 }
 
-impl WalConfig2 {
+impl WalConfig {
     pub fn max_file_size(&self) -> usize {
         let size_per_file = (self.size / IDEAL_NUM_FILES) / PAGE_MULTIPLIER * PAGE_MULTIPLIER;
         if size_per_file < MIN_SIZE_PER_FILE.to_bytes() {
@@ -114,48 +114,20 @@ impl WalConfig2 {
     }
 }
 
-/// A Data object that holds configuration for [Wal]
-#[derive(Serialize, Deserialize, Clone)]
-struct WalConfig {
-    // location on directory where files shall be store
-    location: PathBuf,
-    // maximum storage size to be taken in KBs
-    size: usize,
-    // sync is on or off
-    fsync: bool,
-    // a value of zero means buffer is disabled
-    buffer_size: usize,
-    // Auto sync interval in milliseconds
-    // sync_interval: u64,
-    // The maximum size of a single item in the log
-    // max_item_size: usize,
-}
-
-impl Default for WalConfig {
-    fn default() -> Self {
-        Self {
-            location: Default::default(),
-            size: usize::MAX,
-            fsync: false,
-            buffer_size: DEFAULT_BUFFER_SIZE,
-        }
-    }
-}
-
 #[cfg(test)]
 mod lib_tests {
     use super::*;
 
     #[test]
     fn small_size() {
-        let mut config = WalConfig2::default();
+        let mut config = WalConfig::default();
         config.size = 1024 * 1024; // 1 MB
         assert_eq!(config.max_file_size(), 1024 * 16); // 16 KB
     }
 
     #[test]
     fn large_size() {
-        let mut config = WalConfig2::default();
+        let mut config = WalConfig::default();
         config.size = 1024 * 1024 * 100; // 100 MB
         assert_eq!(config.max_file_size(), 1024 * 1024); // 1 MB
     }
