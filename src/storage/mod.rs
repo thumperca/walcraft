@@ -151,7 +151,7 @@ impl Storage {
                         return Err(WalError::IoError(format!(
                             "Failed to delete old log file {}: {} {}",
                             segment.file_id,
-                            e.to_string(),
+                            e,
                             e.kind()
                         )));
                     }

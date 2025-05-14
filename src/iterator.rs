@@ -29,11 +29,12 @@ impl Iterator for WalIterator {
             Some(v) => Some(v),
             None => {
                 // release read lock when done
-                if let Err(_) = self
+                if self
                     .wal
                     .inner
                     .mode
                     .compare_exchange(MODE_READ, MODE_IDLE, Relaxed, Relaxed)
+                    .is_err()
                 {
                     panic!("Walcraft error: unable to release read lock on WAL");
                 }

@@ -77,7 +77,7 @@ impl WalBuilder {
             Some(loc) => loc,
         };
         if let Err(e) = std::fs::create_dir_all(location.as_path()) {
-            let msg = format!("Failed to access WAL location: {}", e.to_string());
+            let msg = format!("Failed to access WAL location: {}", e);
             return Err(WalError::ConfigError(msg));
         }
         // validate page size

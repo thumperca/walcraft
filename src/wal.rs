@@ -101,10 +101,11 @@ impl Wal {
 
     /// Read the logs
     pub fn iter(&self) -> Result<WalIterator, WalError> {
-        if let Err(_) = self
+        if self
             .inner
             .mode
             .compare_exchange(MODE_IDLE, MODE_READ, Relaxed, Relaxed)
+            .is_err()
         {
             return Err(WalError::LockError(
                 "Unable to acquire read lock on WAL".to_string(),
