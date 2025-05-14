@@ -209,7 +209,7 @@ mod tests {
             config.max_file_size(),
         )
         .unwrap();
-        let data = segment.iter().collect::<Vec<_>>();
+        let data = segment.iter().unwrap().collect::<Vec<_>>();
         assert_eq!(data.len(), 3);
         assert_eq!(data[1], b"Hello, Rust!");
     }

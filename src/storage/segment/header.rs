@@ -5,6 +5,7 @@ use crate::PAGE_MULTIPLIER;
 ///
 /// This metadata is essential when reading the file back
 /// as the version or page_size may changes over time
+#[derive(Clone)]
 pub(crate) struct Header {
     /// Version of WAL file
     version: usize,
@@ -79,7 +80,9 @@ impl TryFrom<&[u8]> for Header {
         // ensure the first 4 bytes are "HEAD"
         let sign = &data[0..4];
         if sign != "HEAD".as_bytes() {
-            return Err(WalError::DeserializeError("Invalid header signature".to_string()));
+            return Err(WalError::DeserializeError(
+                "Invalid header signature".to_string(),
+            ));
         }
 
         // read the data

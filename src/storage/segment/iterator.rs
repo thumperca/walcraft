@@ -1,14 +1,14 @@
 use crate::storage::segment::FileSegment;
 use std::collections::VecDeque;
 
-pub(crate) struct PageIterator<'a> {
-    segment: &'a mut FileSegment,
+pub(crate) struct PageIterator {
+    segment: FileSegment,
     current_page: u32,
     buffer: VecDeque<Vec<u8>>,
 }
 
-impl<'a> PageIterator<'a> {
-    pub fn new(segment: &'a mut FileSegment) -> Self {
+impl PageIterator {
+    pub fn new(segment: FileSegment) -> Self {
         PageIterator {
             segment,
             current_page: 0,
@@ -17,7 +17,7 @@ impl<'a> PageIterator<'a> {
     }
 }
 
-impl<'a> Iterator for PageIterator<'a> {
+impl Iterator for PageIterator {
     type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -71,10 +71,10 @@ mod tests {
         drop(segment);
         // open segment
         let path = FileSegment::get_path(TESTING_DIR, 1);
-        let mut segment =
+        let segment =
             FileSegment::open_existing(path.to_str().unwrap(), PAGE_MULTIPLIER * 100).unwrap();
         // Iterate over the pages
-        let mut iterator = PageIterator::new(&mut segment).collect::<Vec<_>>();
+        let mut iterator = PageIterator::new(segment).collect::<Vec<_>>();
         assert_eq!(iterator.len(), 2);
         assert_eq!(iterator.pop().unwrap(), b"World");
         assert_eq!(iterator.pop().unwrap(), b"Hello");

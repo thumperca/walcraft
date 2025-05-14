@@ -1,5 +1,5 @@
 mod header;
-mod iterator;
+pub(crate) mod iterator;
 mod page;
 
 use self::header::Header;
@@ -189,8 +189,21 @@ impl FileSegment {
     }
 
     /// Returns an iterator that yields each record from the segment file
-    pub fn iter(&mut self) -> PageIterator {
-        PageIterator::new(self)
+    pub fn iter(&mut self) -> Result<PageIterator, WalError> {
+        let file = self.file.try_clone().map_err(|e| {
+            WalError::IoError(format!(
+                "Failed to clone file handle for segment {}: {}",
+                self.header.segment_id, e
+            ))
+        })?;
+        let segment = Self {
+            header: self.header.clone(),
+            pages: VecDeque::new(),
+            file,
+            is_dirty: false,
+            max_size: self.max_size,
+        };
+        Ok(PageIterator::new(segment))
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -332,7 +345,7 @@ mod tests {
         // read data
         let mut segment =
             FileSegment::open_existing(path.to_str().unwrap(), PAGE_MULTIPLIER * 100).unwrap();
-        let items = segment.iter().collect::<Vec<_>>();
+        let items = segment.iter().unwrap().collect::<Vec<_>>();
         assert_eq!(items.len(), 2);
         assert_eq!(items[0], b"John Doe");
         assert_eq!(items[1], b"Jane Doe");
@@ -354,7 +367,7 @@ mod tests {
         // read data
         let mut segment =
             FileSegment::open_existing(path.to_str().unwrap(), PAGE_MULTIPLIER * 100).unwrap();
-        let items = segment.iter().collect::<Vec<_>>();
+        let items = segment.iter().unwrap().collect::<Vec<_>>();
         assert_eq!(items.len(), 1_001);
         assert_eq!(&items[0], &b"Record number 0");
         assert_eq!(&items[100], &b"Record number 100");
