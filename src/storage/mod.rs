@@ -1,4 +1,5 @@
 mod factory;
+mod iterator;
 mod meta;
 mod segment;
 
