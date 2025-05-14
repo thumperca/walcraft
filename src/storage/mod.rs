@@ -142,6 +142,7 @@ impl Storage {
                 Some(segment) => segment,
                 None => break,
             };
+            self.meta.dirty = true;
             let path = FileSegment::get_path(&self.config.location, segment.file_id);
             if let Err(e) = std::fs::remove_file(path) {
                 match e.kind() {

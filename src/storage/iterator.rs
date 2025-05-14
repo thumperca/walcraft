@@ -87,4 +87,33 @@ mod tests {
         assert_eq!(data.first().unwrap(), b"Item 1");
         assert_eq!(data.last().unwrap(), b"Item 100");
     }
+
+    #[test]
+    fn many_files_with_gc() {
+        clean_test_dir();
+        // write data
+        let config = WalConfig2 {
+            location: TESTING_DIR.into(),
+            size: PAGE_MULTIPLIER * 10,
+            fsync: false,
+            page_size: PAGE_MULTIPLIER,
+            sync_interval: 100,
+        };
+        let mut storage = Storage::new(config).unwrap();
+        for i in 1..=5000 {
+            let msg = format!("Item {}", i);
+            storage.append(msg.as_bytes()).unwrap();
+        }
+        storage.flush().unwrap();
+        drop(storage);
+
+        // read data
+        let meta = Meta::read_from_file(TESTING_DIR).unwrap();
+        assert_eq!(meta.segments.len(), 2);
+        let wal_iterator = WalIterator::new(meta);
+        let data = wal_iterator.collect::<Vec<_>>();
+        assert_eq!(data.len(), 1561);
+        assert_eq!(data.first().unwrap(), b"Item 3440");
+        assert_eq!(data.last().unwrap(), b"Item 5000");
+    }
 }
