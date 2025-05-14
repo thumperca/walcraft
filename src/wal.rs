@@ -143,7 +143,11 @@ impl Wal {
 
     /// Sync the in-memory buffer with Disk IO
     pub fn flush(&self) -> Result<(), WalError> {
-        self.inner.storage.lock().unwrap().flush()
+        self.inner
+            .storage
+            .lock()
+            .unwrap()
+            .flush(self.inner.config.fsync)
     }
 
     /// Delete all the stored logs... Use Carefully!

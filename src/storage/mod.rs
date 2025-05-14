@@ -52,11 +52,11 @@ impl Storage {
         Ok(())
     }
 
-    pub fn flush(&mut self) -> Result<(), WalError> {
+    pub fn flush(&mut self, fsync: bool) -> Result<(), WalError> {
         // sync all active segments
         for segment in &mut self.segments {
             if segment.is_dirty() {
-                segment.flush()?;
+                segment.flush(fsync)?;
             }
         }
         // free up memory and update metadata
@@ -203,7 +203,7 @@ mod tests {
         storage.append(b"Hello, world!").unwrap();
         storage.append(b"Hello, Rust!").unwrap();
         storage.append(b"Hello, WAL!").unwrap();
-        storage.flush().unwrap();
+        storage.flush(false).unwrap();
         drop(storage);
         // ensure data is there
         let mut segment = FileSegment::open_existing(
@@ -232,7 +232,7 @@ mod tests {
             let data = format!("Hello, world! {}", i); // 18 bytes
             storage.append(data.as_bytes()).unwrap();
         }
-        storage.flush().unwrap();
+        storage.flush(false).unwrap();
     }
 
     #[test]
@@ -251,7 +251,7 @@ mod tests {
             let data = format!("Hello, world! {}", i); // 18 bytes
             storage.append(data.as_bytes()).unwrap();
         }
-        storage.flush().unwrap();
+        storage.flush(false).unwrap();
     }
 
     fn setup_data(config: &WalConfig, pointer: u32) {
@@ -277,7 +277,7 @@ mod tests {
         )
         .expect("Failed to create new segment");
         segment.is_dirty = true;
-        segment.flush().expect("Failed to flush segment");
+        segment.flush(false).expect("Failed to flush segment");
     }
 
     #[test]
@@ -299,7 +299,7 @@ mod tests {
             let data = format!("Hello, world! {}", i); // 18 bytes
             storage.append(data.as_bytes()).unwrap();
         }
-        storage.flush().unwrap();
+        storage.flush(false).unwrap();
         // test for wrapping add
         let meta = storage.meta;
         assert_eq!(meta.current_pointer, 1);

@@ -77,7 +77,7 @@ mod tests {
             let msg = format!("Item {}", i);
             storage.append(msg.as_bytes()).unwrap();
         }
-        storage.flush().unwrap();
+        storage.flush(false).unwrap();
         drop(storage);
 
         // read data
@@ -105,7 +105,7 @@ mod tests {
             let msg = format!("Item {}", i);
             storage.append(msg.as_bytes()).unwrap();
         }
-        storage.flush().unwrap();
+        storage.flush(false).unwrap();
         drop(storage);
 
         // read data

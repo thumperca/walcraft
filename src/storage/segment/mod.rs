@@ -211,10 +211,18 @@ impl FileSegment {
     }
 
     /// Flush all in-memory changes to IO
-    pub fn flush(&mut self) -> Result<(), WalError> {
+    pub fn flush(&mut self, fsync: bool) -> Result<(), WalError> {
         if self.is_dirty {
             self.sync_header()?;
             self.sync_pages()?;
+            if fsync {
+                self.file.sync_all().map_err(|e| {
+                    WalError::IoError(format!(
+                        "Failed to execute fsync command on segment {}: {}",
+                        self.header.segment_id, e
+                    ))
+                })?;
+            }
             self.is_dirty = false;
         }
         Ok(())
@@ -301,7 +309,7 @@ mod tests {
         let mut segment =
             FileSegment::create_new(TESTING_DIR, 1, PAGE_MULTIPLIER, PAGE_MULTIPLIER * 100)
                 .unwrap();
-        segment.flush().unwrap();
+        segment.flush(false).unwrap();
         drop(segment);
         let path = FileSegment::get_path(TESTING_DIR, 1);
         let segment =
@@ -318,7 +326,7 @@ mod tests {
                 .unwrap();
         assert!(segment.append(b"John Doe"));
         assert!(segment.append(b"Jane Doe"));
-        segment.flush().unwrap();
+        segment.flush(false).unwrap();
         drop(segment);
         let path = FileSegment::get_path(TESTING_DIR, 1);
         // read data
@@ -339,7 +347,7 @@ mod tests {
                 .unwrap();
         assert!(segment.append(b"John Doe"));
         assert!(segment.append(b"Jane Doe"));
-        segment.flush().unwrap();
+        segment.flush(false).unwrap();
         drop(segment);
         let path = FileSegment::get_path(TESTING_DIR, 1);
         // read data
@@ -361,7 +369,7 @@ mod tests {
         for i in 0..=1_000 {
             assert!(segment.append(format!("Record number {}", i).as_bytes()));
         }
-        segment.flush().unwrap();
+        segment.flush(false).unwrap();
         drop(segment);
         let path = FileSegment::get_path(TESTING_DIR, 1);
         // read data

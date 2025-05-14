@@ -67,7 +67,7 @@ mod tests {
                 .unwrap();
         assert!(segment.append(b"Hello"));
         assert!(segment.append(b"World"));
-        segment.flush().unwrap();
+        segment.flush(false).unwrap();
         drop(segment);
         // open segment
         let path = FileSegment::get_path(TESTING_DIR, 1);
