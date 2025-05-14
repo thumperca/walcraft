@@ -3,7 +3,6 @@ pub(crate) mod iterator;
 mod page;
 
 use self::header::Header;
-use self::iterator::PageIterator;
 use self::page::Page;
 use crate::error::WalError;
 use crate::PAGE_MULTIPLIER;
@@ -142,6 +141,7 @@ impl FileSegment {
     }
 
     /// Read all entries from a single page
+    #[cfg(test)]
     fn read_page_entries(&mut self, page_id: u32) -> Result<Vec<Vec<u8>>, WalError> {
         let page = self.read_page(page_id)?;
         Ok(page.read(self.header.length_prefix))
@@ -186,24 +186,6 @@ impl FileSegment {
         self.header.is_dirty = true;
         self.is_dirty = true;
         Page::new(self.header.num_pages, self.header.page_size)
-    }
-
-    /// Returns an iterator that yields each record from the segment file
-    pub fn iter(&mut self) -> Result<PageIterator, WalError> {
-        let file = self.file.try_clone().map_err(|e| {
-            WalError::IoError(format!(
-                "Failed to clone file handle for segment {}: {}",
-                self.header.segment_id, e
-            ))
-        })?;
-        let segment = Self {
-            header: self.header.clone(),
-            pages: VecDeque::new(),
-            file,
-            is_dirty: false,
-            max_size: self.max_size,
-        };
-        Ok(PageIterator::new(segment))
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -283,6 +265,7 @@ impl FileSegment {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::segment::iterator::PageIterator;
     use crate::tests::clean_test_dir;
     use crate::TESTING_DIR;
 
@@ -351,9 +334,9 @@ mod tests {
         drop(segment);
         let path = FileSegment::get_path(TESTING_DIR, 1);
         // read data
-        let mut segment =
+        let segment =
             FileSegment::open_existing(path.to_str().unwrap(), PAGE_MULTIPLIER * 100).unwrap();
-        let items = segment.iter().unwrap().collect::<Vec<_>>();
+        let items = PageIterator::new(segment).collect::<Vec<_>>();
         assert_eq!(items.len(), 2);
         assert_eq!(items[0], b"John Doe");
         assert_eq!(items[1], b"Jane Doe");
@@ -373,9 +356,9 @@ mod tests {
         drop(segment);
         let path = FileSegment::get_path(TESTING_DIR, 1);
         // read data
-        let mut segment =
+        let segment =
             FileSegment::open_existing(path.to_str().unwrap(), PAGE_MULTIPLIER * 100).unwrap();
-        let items = segment.iter().unwrap().collect::<Vec<_>>();
+        let items = PageIterator::new(segment).collect::<Vec<_>>();
         assert_eq!(items.len(), 1_001);
         assert_eq!(&items[0], &b"Record number 0");
         assert_eq!(&items[100], &b"Record number 100");

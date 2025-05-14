@@ -39,7 +39,7 @@ use crate::error::WalError;
 use crate::iterator::WalIterator;
 use crate::storage::Storage;
 use crate::{WalConfig, PAGE_MULTIPLIER};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::fs::remove_dir_all;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering::Acquire;
@@ -160,6 +160,7 @@ impl Wal {
 mod tests {
     use super::*;
     use crate::tests::{clean_test_dir, TESTING_DIR};
+    use serde::Deserialize;
 
     #[derive(Serialize, Deserialize, Clone)]
     struct Log {

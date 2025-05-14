@@ -1,6 +1,5 @@
 use crate::error::WalError;
 use crate::storage::segment::FileSegment;
-use crate::tests::clean_test_dir;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -93,35 +92,39 @@ impl Meta {
         path
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::{clean_test_dir, TESTING_DIR};
 
-#[test]
-fn it_works() {
-    let path = crate::TESTING_DIR;
-    clean_test_dir();
-    // create a new file
-    let mut meta = Meta {
-        dirty: true,
-        init: true,
-        location: Meta::path(path),
-        current_pointer: 101,
-        segments: VecDeque::from([
-            SizeEntry {
-                file_id: 1,
-                page_size: 4096,
-                file_size: 8192,
-            },
-            SizeEntry {
-                file_id: 2,
-                page_size: 1024,
-                file_size: 2048,
-            },
-        ]),
-    };
-    meta.sync().unwrap();
-    // read from the file
-    let meta = Meta::read_from_file(path).unwrap();
-    assert_eq!(meta.current_pointer, 101);
-    assert_eq!(meta.segments.len(), 2);
-    assert_eq!(meta.segments[1].page_size, 1024);
-    assert_eq!(meta.segments[1].file_size, 2048);
+    #[test]
+    fn it_works() {
+        clean_test_dir();
+        // create a new file
+        let mut meta = Meta {
+            dirty: true,
+            init: true,
+            location: Meta::path(TESTING_DIR),
+            current_pointer: 101,
+            segments: VecDeque::from([
+                SizeEntry {
+                    file_id: 1,
+                    page_size: 4096,
+                    file_size: 8192,
+                },
+                SizeEntry {
+                    file_id: 2,
+                    page_size: 1024,
+                    file_size: 2048,
+                },
+            ]),
+        };
+        meta.sync().unwrap();
+        // read from the file
+        let meta = Meta::read_from_file(TESTING_DIR).unwrap();
+        assert_eq!(meta.current_pointer, 101);
+        assert_eq!(meta.segments.len(), 2);
+        assert_eq!(meta.segments[1].page_size, 1024);
+        assert_eq!(meta.segments[1].file_size, 2048);
+    }
 }

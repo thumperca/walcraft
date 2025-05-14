@@ -171,6 +171,7 @@ impl Storage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::iterator::StorageIterator;
     use crate::tests::clean_test_dir;
     use crate::TESTING_DIR;
     use std::path::PathBuf;
@@ -206,12 +207,8 @@ mod tests {
         storage.flush(false).unwrap();
         drop(storage);
         // ensure data is there
-        let mut segment = FileSegment::open_existing(
-            FileSegment::get_path(&config.location, 1),
-            config.max_file_size(),
-        )
-        .unwrap();
-        let data = segment.iter().unwrap().collect::<Vec<_>>();
+        let iterator = StorageIterator::new(Meta::read_from_file(TESTING_DIR).unwrap());
+        let data = iterator.collect::<Vec<_>>();
         assert_eq!(data.len(), 3);
         assert_eq!(data[1], b"Hello, Rust!");
     }

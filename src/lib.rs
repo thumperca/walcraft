@@ -46,7 +46,6 @@ mod wal;
 
 pub use self::builder::WalBuilder;
 pub use self::wal::Wal;
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 pub const DEFAULT_BUFFER_SIZE: usize = 4096; // 4 KB

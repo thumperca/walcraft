@@ -1,6 +1,5 @@
 use crate::error::WalError;
 use crate::{Size, Wal, WalConfig, PAGE_MULTIPLIER};
-use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// Build [Wal] with custom configuration
@@ -128,6 +127,7 @@ impl WalBuilder {
 mod tests {
     use super::*;
     use crate::TESTING_DIR;
+    use serde::{Deserialize, Serialize};
 
     #[derive(Serialize, Deserialize)]
     struct Log {
