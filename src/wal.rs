@@ -36,7 +36,8 @@
 //! wal.flush().unwrap();
 //!```
 use crate::error::WalError;
-use crate::storage::{iterator::WalIterator, meta::Meta, Storage};
+use crate::iterator::WalIterator;
+use crate::storage::Storage;
 use crate::{WalConfig, PAGE_MULTIPLIER};
 use serde::{Deserialize, Serialize};
 use std::fs::remove_dir_all;
@@ -46,7 +47,7 @@ use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::sync::{Arc, Mutex};
 
 pub(crate) const MODE_IDLE: u8 = 0;
-const MODE_READ: u8 = 1;
+pub(crate) const MODE_READ: u8 = 1;
 const MODE_WRITE: u8 = 2;
 
 pub(crate) struct WalInner {
@@ -109,9 +110,7 @@ impl Wal {
                 "Unable to acquire read lock on WAL".to_string(),
             ));
         }
-        let meta = Meta::read_from_file(&self.inner.config.location)?;
-        let iterator = WalIterator::new(meta);
-        Ok(iterator)
+        WalIterator::new(self.clone())
     }
 
     /// Write a new log
@@ -134,6 +133,7 @@ impl Wal {
         self.inner.storage.lock().unwrap().append(item)
     }
 
+    /// Write a serializable object to the log
     pub fn append_struct<T: Serialize>(&self, item: T) -> Result<(), WalError> {
         let item = bincode::serialize(&item).map_err(|e| {
             WalError::SerializationError(format!("Unable to serialize struct, Error: {:?}", e))

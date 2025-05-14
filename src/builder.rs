@@ -13,9 +13,9 @@ use std::path::{Path, PathBuf};
 /// ```no_run
 /// use walcraft::{Size, WalBuilder, Wal};
 /// // create a wal with 4 KB buffer and 10 GB storage
-/// let wal: Wal = WalBuilder::new().buffer_size(Size::Kb(4)).storage_size(Size::Gb(10)).build().unwrap();
+/// let wal: Wal = WalBuilder::new().page_size(Size::Kb(4)).storage_size(Size::Gb(10)).build().unwrap();
 /// // create a wal with no buffer, enable fsync and use 250 MB of storage
-/// let wal: Wal = WalBuilder::new().storage_size(Size::Mb(250)).disable_buffer().enable_fsync().build().unwrap();
+/// let wal: Wal = WalBuilder::new().storage_size(Size::Mb(250)).enable_fsync().build().unwrap();
 /// ```
 pub struct WalBuilder {
     location: Option<PathBuf>,

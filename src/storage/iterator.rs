@@ -2,13 +2,14 @@ use super::meta::Meta;
 use super::segment::iterator::PageIterator;
 use crate::storage::segment::FileSegment;
 
-pub(crate) struct WalIterator {
+/// Internal iterator over files in storage
+pub(crate) struct StorageIterator {
     meta: Meta,
     pointer: usize,
     iterator: Option<PageIterator>,
 }
 
-impl WalIterator {
+impl StorageIterator {
     pub fn new(meta: Meta) -> Self {
         Self {
             meta,
@@ -18,7 +19,7 @@ impl WalIterator {
     }
 }
 
-impl Iterator for WalIterator {
+impl Iterator for StorageIterator {
     type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -81,7 +82,7 @@ mod tests {
 
         // read data
         let meta = Meta::read_from_file(TESTING_DIR).unwrap();
-        let wal_iterator = WalIterator::new(meta);
+        let wal_iterator = StorageIterator::new(meta);
         let data = wal_iterator.collect::<Vec<_>>();
         assert_eq!(data.len(), 100);
         assert_eq!(data.first().unwrap(), b"Item 1");
@@ -110,7 +111,7 @@ mod tests {
         // read data
         let meta = Meta::read_from_file(TESTING_DIR).unwrap();
         assert_eq!(meta.segments.len(), 2);
-        let wal_iterator = WalIterator::new(meta);
+        let wal_iterator = StorageIterator::new(meta);
         let data = wal_iterator.collect::<Vec<_>>();
         assert_eq!(data.len(), 1561);
         assert_eq!(data.first().unwrap(), b"Item 3440");

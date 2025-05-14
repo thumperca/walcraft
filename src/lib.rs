@@ -18,10 +18,10 @@
 //! }
 //!
 //! // create an instance of WAL
-//! let wal = Wal::new("/tmp/logz", Some(2000));
+//! let wal = Wal::new("/tmp/logz", Some(2000)).unwrap();
 //!
 //! // recovery: Option A
-//! let all_logs = wal.iter().unwrap().collect::<Vec<Log>>();
+//! let all_logs = wal.iter().unwrap().collect::<Vec<_>>();
 //! // recovery: Option B
 //! for log in wal.iter().unwrap() {
 //!   // do something with logs
@@ -39,6 +39,7 @@
 
 mod builder;
 pub(crate) mod error;
+mod iterator;
 mod storage;
 pub(crate) mod tests;
 mod wal;
