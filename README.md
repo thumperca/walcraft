@@ -4,7 +4,7 @@ Walcraft is a Write Ahead Log (WAL) solution for concurrent environments. The li
 an in-memory buffer and append-only logs. The logs are stored in multiple files, and older files are deleted to save
 space.
 
-# Deprecation Notice (Breaking Changes in Version 0.3)
+# Breaking Changes in Version 0.3
 
 We have introduced significant changes to the WAL library in version 0.3 that are not backward compatible with
 the previous versions. Because of these breaking changes, any logs created by older versions of the WAL library will not
@@ -22,11 +22,12 @@ All data is now handled strictly as binary blobs (&[u8]). Both the append and re
 This change helps streamline performance and reduce dependency overhead. It reduces the tight coupling with the serde
 library and offers more flexibility in how data is serialized and deserialized.
 
-**Convenient Struct Interface (for Writing Only)**
+**Convenient Struct Interface**
 
-A new convenience method `append_struct<T: Serialize>(...)` is offered (behind `serde` feature flag) to serialize
-your structs automatically. However, reading the WAL will still yield raw bytes only, so you must manually deserialize
-them back into your types.
+A new convenience method `append_struct<T: Serialize>(item: T)` is offered (behind `struct` feature flag) to serialize
+your structs automatically. On reading, the library will return a `LogEntry` object, which can be converted to struct
+using `to_struct<T: Deserialize>()`. Alternatively, you can use the `data()` method to get the underlying binary
+data.
 
 # Features
 
@@ -46,28 +47,30 @@ them back into your types.
 
 The builder pattern allows for complete customization of the WAL instance.
 
-```
+```rust
 use walcraft::{Size, WalBuilder, Wal};
 
-// create a wal with 4 KB page size, 10 GB storage and autosync every 50ms
-let wal: Wal<String> = WalBuilder::new()
-  .location("/tmp/logs/wal")
-  .page_size(Size::Kb(4))
-  .storage_size(Size::Gb(10))
-  .sync_interval(50)
-  .build()
-  .unwrap();
+fn main() {
+    // create a wal with 4 KB page size, 10 GB storage and autosync every 50ms
+    let wal: Wal<String> = WalBuilder::new()
+        .location("/tmp/logs/wal")
+        .page_size(Size::Kb(4))
+        .storage_size(Size::Gb(10))
+        .sync_interval(50)
+        .build()
+        .unwrap();
 
-// create a wal with 16 KB page size, enable fsync, use 250 MB of storage, disable autosync and enable checksum
-let wal: Wal<String> = WalBuilder::new()
-  .location("/tmp/logs/wal")
-  .storage_size(Size::Mb(250))
-  .page_size(Size::Mb(16))
-  .sync_interval(0)
-  .enable_checksum()
-  .enable_fsync()
-  .build()
-  .unwrap();
+    // create a wal with 16 KB page size, enable fsync, use 250 MB of storage, disable autosync and enable checksum
+    let wal2: Wal<String> = WalBuilder::new()
+        .location("/tmp/logs/wal")
+        .storage_size(Size::Mb(250))
+        .page_size(Size::Mb(16))
+        .sync_interval(0)
+        .enable_checksum()
+        .enable_fsync()
+        .build()
+        .unwrap();
+}
 ```
 
 ### Direct Initialization
@@ -75,18 +78,20 @@ let wal: Wal<String> = WalBuilder::new()
 This method only allows you to set location and storage size (in MBs) only.
 The buffer size is set to 4 KB by default and fsync is disabled.
 
-```
+```rust
 use walcraft::Wal;
 
-// Create a wal instance with 200 MB of storage
-let wal = Wal::new("/tmp/logs/wal", Some(200));
+fn main() {
+    // Create a wal instance with 200 MB of storage
+    let wal = Wal::new("/tmp/logs/wal", Some(200));
+}
 ```
 
 # Usage
 
 ### Writing logs
 
-```
+```rust
 use serde::{Deserialize, Serialize};
 use walcraft::Wal;
 
@@ -97,32 +102,34 @@ struct Log {
     value: f64
 }
 
-let log = Log {id: 1, value: 5.6234};
+fn main() {
+    let log = Log { id: 1, value: 5.6234 };
 
-// initiate wal and add a log
-let wal = Wal::new("./tmp/", None);
-wal.write(log); // write a log
+    // initiate wal and add a log
+    let wal = Wal::new("./tmp/", None);
+    wal.write(log); // write a log
 
-// write a log in another thread
-let wal2 = wal.clone();
-std::thread::spawn(move | | {
-let log = Log{id: 2, value: 0.45};
-  wal2.write(log);
-});
+    // write a log in another thread
+    let wal2 = wal.clone();
+    std::thread::spawn(move || {
+        let log = Log { id: 2, value: 0.45 };
+        wal2.write(log);
+    });
 
-// keep writing logs in current thread
-let log = Log{id: 3, value: 123.59};
-wal.write(log);
+    // keep writing logs in current thread
+    let log = Log { id: 3, value: 123.59 };
+    wal.write(log);
 
-// Flush the logs to the disk manually
-// This happens automatically as well after some time. However, it's advised to
-// run this method before terminating the program to ensure that no logs are lost.
-wal.flush();
+    // Flush the logs to the disk manually
+    // This happens automatically as well after some time. However, it's advised to
+    // run this method before terminating the program to ensure that no logs are lost.
+    wal.flush();
+}
 ```
 
 ### Reading logs
 
-```
+```rust
 use serde::{Deserialize, Serialize};
 use walcraft::Wal;
 
@@ -132,31 +139,40 @@ struct Log {
     id: usize,
     value: f64
 }
-let wal: Wal<Log> = Wal::new("./tmp/", None);
-let iterator = wal.read().unwrap();
 
-for log in iterator {
-    dbg!(log);
+fn main() {
+    let wal: Wal<Log> = Wal::new("./tmp/", None);
+    let iterator = wal.read().unwrap();
+
+    for entry in iterator {
+        let raw_log = entry.data(); // read raw bytes
+        let log: Log = entry.to_struct().unwarp(); // convert raw bytes to struct
+        println!("Log: {:?}", log);
+    }
 }
 ```
 
 ### Limiting the size of logs
 
-`Wal::new` method accepts 2 arguments. The first argument is the directory where logs will be stored.
+`Wal::new` method accepts two arguments. The first argument is the directory where logs will be stored.
 The second (optional) argument is for the preferred storage that logs shall occupy in MBs.
 
-Once the storage occupied by log files exceed the provided limit, the older logs are deleted in chunks
+Once the storage occupied by log files exceeds the provided limit, the older logs are deleted in chunks
 to free up some space.
 
-```
-// Unlimited log storage
-let wal = Wal::new("/tmp/logz", None);
+```rust
+use walcraft::Wal;
 
-// 500 MB of logs storage
-let wal = Wal::new("/tmp/logz", Some(500));
+fn main() {
+    // Unlimited log storage
+    let wal = Wal::new("/tmp/logz", None);
 
-// 20 GB of logs storage
-let wal = Wal::new("/tmp/logz", Some(20_000));
+    // 500 MB of logs storage
+    let wal = Wal::new("/tmp/logz", Some(500));
+
+    // 20 GB of logs storage
+    let wal = Wal::new("/tmp/logz", Some(20_000));
+}
 ```
 
 # Useful tips
@@ -184,15 +200,15 @@ The WAL can only be in read mode or write mode, not both at the same time.
 
 - **Ideal**: When created, the WAL is in an idle mode.
 - **Read**: Calling `.read()` method switches the WAL to read mode. In this mode, you cannot write data;
-  any write attempts will be ignored. Once the reading finishes, the WAL automatically reverts back to ideal mode.
+  any write attempts will be ignored. Once the reading finishes, the WAL automatically reverts to ideal mode.
 - **Write**: When you start writing to the WAL, it switches to write mode and cannot switch back to ideal or read mode.
 
 This design prevents conflicts between reading and writing. Ideally, you should read the data at startup, as part of the
 recovery process, before beginning to write.
 
-**Note:** This behaviour will be fixed in a future update.
+**Note:** This behavior will be fixed in a future update.
 
-```
+```rust
 use serde::{Deserialize, Serialize};
 use walcraft::Wal;
 
@@ -203,24 +219,26 @@ struct Log {
     value: f64
 }
 
-// create an instance of WAL
-let wal = Wal::new("/tmp/logz", Some(2000));
+fn main() {
+    // create an instance of WAL
+    let wal = Wal::new("/tmp/logz", Some(2000));
 
-// recovery: Option A (read all data at once)
-// This method reads all the data at once and shall only be used 
-// if all the logs, depending on storage size, can fit in the memory
-let all_logs = wal.read().unwrap().into_iter().collect::<Vec<Log>>();
+    // recovery: Option A (read all data at once)
+    // This method reads all the data at once and shall only be used 
+    // if all the logs, depending on storage size, can fit in the memory
+    let all_logs = wal.read().unwrap().into_iter().collect::<Vec<Log>>();
 
-// recovery: Option B
-// This method reads data in chunks of 8 KB. 
-// It is useful when you have a large number of logs
-for log in wal.read().unwrap() {
-  // do something with logs 
-  dbg!(log);
+    // recovery: Option B
+    // This method reads data in chunks of page size (default: 4 KB). 
+    // It is memory efficient and ideal when you have a large number of logs
+    for log in wal.read().unwrap() {
+        // do something with logs 
+        dbg!(log);
+    }
+
+    // start writing
+    wal.write(Log { id: 1, value: 3.14 });
 }
-
-// start writing
-wal.write(Log{id: 1, value: 3.14});
 
 ```
 
