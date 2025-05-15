@@ -92,3 +92,20 @@ impl Iterator for WalIterator {
         }
     }
 }
+
+impl Drop for WalIterator {
+    fn drop(&mut self) {
+        if self.inner.next().is_none() {
+            return;
+        }
+        if self
+            .wal
+            .inner
+            .mode
+            .compare_exchange(MODE_READ, MODE_IDLE, Relaxed, Relaxed)
+            .is_err()
+        {
+            panic!("Walcraft error: unable to release read lock on WAL");
+        }
+    }
+}
