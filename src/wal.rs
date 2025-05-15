@@ -25,7 +25,7 @@
 //! // recovery: Option B
 //! for log in wal.iter().unwrap() {
 //!   // do something with logs
-//!   dbg!(log);
+//!   dbg!(log.data());
 //! }
 //!
 //! // start writing
@@ -67,6 +67,7 @@ impl WalInner {
     }
 }
 
+/// Write Ahead Log (WAL)
 #[derive(Clone)]
 pub struct Wal {
     pub(crate) inner: Arc<WalInner>,
@@ -204,13 +205,13 @@ mod tests {
         // check item 1
         let item = logs.next();
         assert!(item.is_some());
-        let item = item.map(bytes_to_log).unwrap();
+        let item = item.unwrap().to_struct::<Log>().unwrap();
         assert_eq!(item.id, 420);
         assert_eq!(&item.name, "Jane Doe");
         // check item 2
         let item = logs.next();
         assert!(item.is_some());
-        let item = item.map(bytes_to_log).unwrap();
+        let item = item.unwrap().to_struct::<Log>().unwrap();
         assert_eq!(item.id, 840);
         assert_eq!(&item.name, "John Doe");
         // no item 3
@@ -237,8 +238,8 @@ mod tests {
             .iter()
             .unwrap()
             .into_iter()
-            .map(bytes_to_log)
-            .collect::<Vec<Log>>();
+            .map(|v| v.to_struct::<Log>().unwrap())
+            .collect::<Vec<_>>();
         assert_eq!(data.len(), 20);
         // write more data
         for i in 20..25 {
@@ -256,8 +257,8 @@ mod tests {
             .iter()
             .unwrap()
             .into_iter()
-            .map(bytes_to_log)
-            .collect::<Vec<Log>>();
+            .map(|v| v.to_struct::<Log>().unwrap())
+            .collect::<Vec<_>>();
         assert_eq!(data.len(), 25);
         assert_eq!(data.first().unwrap().id, 1);
         assert_eq!(data.last().unwrap().id, 25);

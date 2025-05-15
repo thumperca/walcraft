@@ -18,23 +18,23 @@
 //! }
 //!
 //! // create an instance of WAL
-//! let wal = Wal::new("/tmp/logz", Some(2000)).unwrap();
+//! let wal = Wal::new("/tmp/walcraft", Some(2000)).unwrap();
 //!
 //! // recovery: Option A
 //! let all_logs = wal.iter().unwrap().collect::<Vec<_>>();
 //! // recovery: Option B
 //! for log in wal.iter().unwrap() {
 //!   // do something with logs
-//!   dbg!(log);
+//!   dbg!(log.data());
 //! }
 //!
 //! // start writing
-//! wal.append(b"LOG_START");
-//! wal.append_struct(Log{id: 1, value: 3.14});
-//! wal.append_struct(Log{id: 2, value: 4.20});
+//! wal.append(b"LOG_START").unwrap();
+//! wal.append_struct(Log{id: 1, value: 3.14}).unwrap();
+//! wal.append_struct(Log{id: 2, value: 4.20}).unwrap();
 //!
-//! // Flush to disk early/manually, before the buffer is filled
-//! wal.flush();
+//! // Flush to disk early/manually, before the page is filled
+//! wal.flush().unwrap();
 //!```
 
 mod builder;
@@ -45,6 +45,7 @@ pub(crate) mod tests;
 mod wal;
 
 pub use self::builder::WalBuilder;
+pub use self::iterator::{LogEntry, WalIterator};
 pub use self::wal::Wal;
 use std::path::PathBuf;
 
@@ -67,6 +68,16 @@ pub enum Size {
 }
 
 impl Size {
+    /// Convert the size to bytes
+    /// ## Example
+    /// ```rust
+    /// use walcraft::Size;
+    /// let size = Size::Kb(8);
+    /// assert_eq!(size.to_bytes(), 8192);
+    ///
+    /// let size = Size::Mb(16);
+    /// assert_eq!(size.to_bytes(), 16777216);
+    /// ```
     pub fn to_bytes(&self) -> usize {
         match self {
             Size::Kb(kb) => *kb * 1024,
