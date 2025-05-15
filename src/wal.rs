@@ -258,4 +258,14 @@ mod tests {
         assert_eq!(data.first().unwrap().id, 1);
         assert_eq!(data.last().unwrap().id, 25);
     }
+
+    #[test]
+    fn extra_large_payload() {
+        let wal = Wal::new(TESTING_DIR, Some(500)).unwrap();
+        let payload = vec![0; 4096 * 2]; // 8 KB
+        let result = wal.append(&payload);
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error, WalError::LogTooLarge);
+    }
 }
