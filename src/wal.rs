@@ -116,6 +116,10 @@ impl Wal {
 
     /// Write a new log
     pub fn append(&self, item: &[u8]) -> Result<(), WalError> {
+        // check if the item is too large
+        if item.len() > self.inner.config.page_size - 8 {
+            return Err(WalError::LogTooLarge);
+        }
         // ensure write mode is either ON
         // or enable it if it's not ON
         let mode = self.inner.mode.load(Relaxed);
