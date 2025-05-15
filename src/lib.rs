@@ -45,6 +45,7 @@ pub(crate) mod tests;
 mod wal;
 
 pub use self::builder::WalBuilder;
+pub use self::error::WalError;
 pub use self::iterator::{LogEntry, WalIterator};
 pub use self::wal::Wal;
 use std::path::PathBuf;
