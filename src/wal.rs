@@ -274,3 +274,60 @@ mod tests {
         assert_eq!(error, WalError::LogTooLarge);
     }
 }
+
+#[cfg(test)]
+mod version_tests {
+    use super::*;
+    use crate::tests::{clean_test_dir, TESTING_DIR};
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    enum Log {
+        V1 { id: usize, name: String },
+        V2 { id: usize, name: String, age: u8 },
+    }
+
+    #[test]
+    fn version_check() {
+        clean_test_dir();
+
+        // write logs
+        let wal = Wal::new(TESTING_DIR, Some(100)).unwrap();
+        wal.append_struct(Log::V1 {
+            id: 1,
+            name: "Alice".to_string(),
+        })
+        .unwrap();
+        wal.append_struct(Log::V2 {
+            id: 2,
+            name: "John".to_string(),
+            age: 30,
+        })
+        .unwrap();
+        wal.flush().unwrap();
+
+        // read logs
+        let wal = Wal::new(TESTING_DIR, Some(100)).unwrap();
+        let iterator = wal.iter().unwrap();
+        let logs: Vec<Log> = iterator
+            .into_iter()
+            .map(|entry| entry.to_struct::<Log>().unwrap())
+            .collect();
+        assert_eq!(logs.len(), 2);
+        assert_eq!(
+            logs[0],
+            Log::V1 {
+                id: 1,
+                name: "Alice".to_string()
+            }
+        );
+        assert_eq!(
+            logs[1],
+            Log::V2 {
+                id: 2,
+                name: "John".to_string(),
+                age: 30
+            }
+        );
+    }
+}
