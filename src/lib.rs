@@ -51,12 +51,11 @@ pub use self::iterator::{LogEntry, WalIterator};
 pub use self::wal::Wal;
 use std::path::PathBuf;
 
-pub const DEFAULT_BUFFER_SIZE: usize = 4096; // 4 KB
 pub const WAL_VERSION: usize = 1;
 pub const TESTING_DIR: &str = "./tmp/testing";
-pub const MAX_STORAGE: Size = Size::Gb(32768); // 32 TB
+pub const MAX_STORAGE: Size = Size::Gb(32768); // 32 TB todo: document this
 pub const MIN_SIZE_PER_FILE: Size = Size::Kb(16); // at least 16 KB files with 12 KB of data storage
-pub const IDEAL_NUM_FILES: usize = 100; // ideal number of files to be created
+pub const IDEAL_NUM_FILES: usize = 20; // ideal number of files to be created
 pub const PAGE_MULTIPLIER: usize = 4096; // 4 KB page size
 
 /// Represents the size of data in KBs, MBs or GBs, such as
@@ -135,13 +134,13 @@ mod lib_tests {
     fn small_size() {
         let mut config = WalConfig::default();
         config.size = 1024 * 1024; // 1 MB
-        assert_eq!(config.max_file_size(), 1024 * 16); // 16 KB
+        assert_eq!(config.max_file_size(), 1024 * 48); // 48 KB
     }
 
     #[test]
     fn large_size() {
         let mut config = WalConfig::default();
         config.size = 1024 * 1024 * 100; // 100 MB
-        assert_eq!(config.max_file_size(), 1024 * 1024); // 1 MB
+        assert_eq!(config.max_file_size(), 1024 * 1024 * 5); // 1 MB
     }
 }
