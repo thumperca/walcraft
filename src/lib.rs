@@ -37,6 +37,7 @@
 //! wal.flush().unwrap();
 //!```
 
+mod background;
 mod builder;
 pub(crate) mod error;
 mod iterator;

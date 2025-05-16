@@ -35,6 +35,7 @@
 //! // Flush to disk early/manually, before the buffer is filled
 //! wal.flush().unwrap();
 //!```
+use crate::background::BackgroundSync;
 use crate::error::WalError;
 use crate::iterator::WalIterator;
 use crate::storage::Storage;
@@ -133,6 +134,12 @@ impl Wal {
                 // check if another thread hasn't already set the value
                 if d != MODE_WRITE {
                     panic!("Walcraft Error: Writing logs while reading data is forbidden");
+                }
+            } else {
+                // run background sync thread
+                let interval = self.inner.config.sync_interval;
+                if interval > 0 {
+                    BackgroundSync::new(self.clone()).run(interval);
                 }
             }
         }
