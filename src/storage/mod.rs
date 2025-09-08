@@ -236,8 +236,9 @@ mod tests {
         storage.flush(false).unwrap();
     }
 
+    // Test garbage collection with only 4 KiB limit
     #[test]
-    fn garbage_collection() {
+    fn garbage_collection_small_files() {
         // write 200 kB data + metadata
         clean_test_dir();
         let config = WalConfig {
@@ -270,6 +271,45 @@ mod tests {
             size_kb > 25,
             "total size is {} KiB, expected > 25 KiB",
             size_kb
+        );
+    }
+
+    // Test garbage collection with 4 MiB limit
+    #[test]
+    fn garbage_collection() {
+        // write 3.8 MB of data + metadata
+        clean_test_dir();
+        let config = WalConfig {
+            location: PathBuf::from(TESTING_DIR),
+            size: 4096 * 1024, // 4 MiB
+            fsync: false,
+            page_size: 4096, // 4 KiB
+            sync_interval: 100,
+        };
+        let mut storage = Storage::new(config).unwrap();
+        // write a lot of data
+        for i in 0..200_000 {
+            let data = format!("Hello, world! {:06}", i); // 20 bytes
+            storage.append(data.as_bytes()).unwrap();
+        }
+        storage.flush(false).unwrap();
+        // test that older files & records were GCed
+        drop(storage);
+        let meta = Meta::read_from_file(TESTING_DIR).unwrap();
+        dbg!(&meta);
+        let total_size: usize = meta.segments.iter().map(|s| s.file_size).sum();
+        assert!(meta.segments.front().unwrap().file_id > 2);
+        assert!(meta.segments.front().unwrap().file_id < 10);
+        let size_mb = total_size / (1024 * 1024);
+        assert!(
+            size_mb <= 4,
+            "total size is {} KiB, expected <= 4 MiB",
+            size_mb
+        );
+        assert!(
+            size_mb >= 3,
+            "total size is {} KiB, expected > 3 MiB",
+            size_mb
         );
     }
 
