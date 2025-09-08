@@ -238,21 +238,39 @@ mod tests {
 
     #[test]
     fn garbage_collection() {
+        // write 200 kB data + metadata
         clean_test_dir();
         let config = WalConfig {
             location: PathBuf::from(TESTING_DIR),
-            size: 4096 * 10, // 40 KB
+            size: 4096 * 10, // 40 KiB
             fsync: false,
-            page_size: 4096,
+            page_size: 4096, // 4 KiB
             sync_interval: 100,
         };
         let mut storage = Storage::new(config).unwrap();
         // write a lot of data
-        for i in 0..1000 {
-            let data = format!("Hello, world! {}", i); // 18 bytes
+        for i in 0..10_000 {
+            let data = format!("Hello, world! {:06}", i); // 20 bytes
             storage.append(data.as_bytes()).unwrap();
         }
         storage.flush(false).unwrap();
+        // test that older files & records were GCed
+        drop(storage);
+        let meta = Meta::read_from_file(TESTING_DIR).unwrap();
+        let total_size: usize = meta.segments.iter().map(|s| s.file_size).sum();
+        assert!(meta.segments.front().unwrap().file_id > 5);
+        assert!(meta.segments.front().unwrap().file_id < 30);
+        let size_kb = total_size / 1024;
+        assert!(
+            size_kb <= 40,
+            "total size is {} KiB, expected <= 40 KiB",
+            size_kb
+        );
+        assert!(
+            size_kb > 25,
+            "total size is {} KiB, expected > 25 KiB",
+            size_kb
+        );
     }
 
     fn setup_data(config: &WalConfig, pointer: u32) {

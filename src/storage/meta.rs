@@ -11,7 +11,7 @@ const WARNING: &str =
 // sync this information to disk
 // Disk sync shall happen when a new file is create and upon close on filled
 // current_pointer can be used for this
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct Meta {
     #[serde(skip)]
     pub(crate) dirty: bool,
