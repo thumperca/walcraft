@@ -51,6 +51,16 @@ pub(crate) const MODE_IDLE: u8 = 0;
 pub(crate) const MODE_READ: u8 = 1;
 const MODE_WRITE: u8 = 2;
 
+/// Inner structure of Wal
+///
+/// Holds the configuration, mode and storage
+/// Used internally for thread-safe operations and shared ownership across threads
+///
+/// # Fields
+/// - config: Configuration for the WAL
+/// - mode: Current mode of the WAL (Idle, Read, Write)
+/// - storage: Mutex-protected storage for log entries
+///
 pub(crate) struct WalInner {
     pub config: WalConfig,
     pub mode: AtomicU8,

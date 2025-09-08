@@ -12,7 +12,7 @@ use crate::{WalConfig, PAGE_MULTIPLIER};
 use std::collections::VecDeque;
 use std::io::ErrorKind;
 
-/// Storage manager for the WAL
+/// Storage manager (or storage engine) for the WAL
 ///
 /// This module is responsible for the actual IO operations, including
 /// - Reading data from IO
@@ -26,11 +26,13 @@ pub(crate) struct Storage {
 }
 
 impl Storage {
+    /// Initialize a new storage manager
     pub fn new(config: WalConfig) -> Result<Self, WalError> {
         let storage = StorageFactory::new(config)?;
         Ok(storage)
     }
 
+    /// Append data to the WAL
     pub fn append(&mut self, data: &[u8]) -> Result<(), WalError> {
         // ensure a segment is loaded into memory
         if self.segments.is_empty() {
@@ -52,6 +54,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Flush all changes to disk
     pub fn flush(&mut self, fsync: bool) -> Result<(), WalError> {
         // sync all active segments
         for segment in &mut self.segments {
@@ -97,6 +100,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Load a new segment in memory for writing
     fn next_segment(&mut self) -> Result<(), WalError> {
         let mut new_id = self.meta.current_pointer.wrapping_add(1);
         if new_id == 0 {
