@@ -41,7 +41,6 @@ impl Storage {
         // write to the segment
         let segment = self.segments.back_mut().unwrap();
         if segment.append(data) {
-            self.meta.dirty = true;
             return Ok(());
         }
         // failed to write data as the segment is full.
@@ -49,16 +48,15 @@ impl Storage {
         self.next_segment()?;
         // write to the new segment
         let segment = self.segments.back_mut().unwrap();
-        self.meta.dirty = true;
         if !segment.append(data) {
             unreachable!("Failed to write data to a new segment");
         }
-        Ok(())
+        self.meta.sync()
     }
 
     /// Flush all changes to disk
     pub fn flush(&mut self, fsync: bool) -> Result<(), WalError> {
-        if !self.meta.init || !self.meta.dirty {
+        if !self.meta.init || self.segments.is_empty() {
             return Ok(());
         }
         // sync all active segments
