@@ -56,6 +56,9 @@ impl Storage {
 
     /// Flush all changes to disk
     pub fn flush(&mut self, fsync: bool) -> Result<(), WalError> {
+        if !self.meta.init || !self.meta.dirty {
+            return Ok(());
+        }
         // sync all active segments
         for segment in &mut self.segments {
             if segment.is_dirty() {
