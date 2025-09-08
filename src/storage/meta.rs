@@ -48,7 +48,6 @@ impl Meta {
         if !found {
             self.segments.push_back(SizeEntry {
                 file_id: segment.header.segment_id,
-                page_size: segment.header.page_size,
                 file_size: segment.len(),
             });
         }
@@ -58,7 +57,6 @@ impl Meta {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub(crate) struct SizeEntry {
     pub(crate) file_id: u32,
-    pub(crate) page_size: usize, // todo: delete this field if unused
     pub(crate) file_size: usize,
 }
 
@@ -109,12 +107,10 @@ mod tests {
             segments: VecDeque::from([
                 SizeEntry {
                     file_id: 1,
-                    page_size: 4096,
                     file_size: 8192,
                 },
                 SizeEntry {
                     file_id: 2,
-                    page_size: 1024,
                     file_size: 2048,
                 },
             ]),
@@ -124,7 +120,6 @@ mod tests {
         let meta = Meta::read_from_file(TESTING_DIR).unwrap();
         assert_eq!(meta.current_pointer, 101);
         assert_eq!(meta.segments.len(), 2);
-        assert_eq!(meta.segments[1].page_size, 1024);
         assert_eq!(meta.segments[1].file_size, 2048);
     }
 }

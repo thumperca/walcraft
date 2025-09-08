@@ -126,7 +126,6 @@ impl Storage {
         self.meta.current_pointer = new_id;
         self.meta.segments.push_back(SizeEntry {
             file_id: segment.header.segment_id,
-            page_size: segment.header.page_size,
             file_size: PAGE_MULTIPLIER,
         });
         self.meta.init = true;
@@ -365,7 +364,6 @@ mod tests {
             current_pointer: pointer,
             segments: VecDeque::from([SizeEntry {
                 file_id: pointer,
-                page_size: 4096,
                 file_size: 4096,
             }]),
         };

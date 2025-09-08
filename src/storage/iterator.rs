@@ -29,7 +29,7 @@ impl Iterator for StorageIterator {
             }
             let meta = &self.meta.segments[self.pointer];
             let path = FileSegment::get_path(self.meta.location.parent().unwrap(), meta.file_id);
-            let segment = match FileSegment::open_existing(path, meta.page_size) {
+            let segment = match FileSegment::open_existing(path, 10) {
                 Ok(segment) => segment,
                 Err(e) => {
                     println!(
