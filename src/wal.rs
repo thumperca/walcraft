@@ -179,6 +179,13 @@ impl Wal {
     }
 }
 
+// ensure everything is flushed to disk on exit
+impl Drop for Wal {
+    fn drop(&mut self) {
+        let _ = self.flush();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
