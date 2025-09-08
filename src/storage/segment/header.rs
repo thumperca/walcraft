@@ -1,6 +1,8 @@
 use crate::error::WalError;
 use crate::PAGE_MULTIPLIER;
 
+const MAGIC: &[u8; 4] = b"HEAD";
+
 /// Header for heap file that stores metadata on the file
 ///
 /// This metadata is essential when reading the file back
@@ -52,7 +54,7 @@ impl Header {
         let mut data = [0; PAGE_MULTIPLIER];
 
         // write the header signature
-        data[0..4].copy_from_slice("HEAD".as_bytes());
+        data[0..4].copy_from_slice(MAGIC);
 
         // write data
         data[4..12].copy_from_slice(&self.version.to_le_bytes());
@@ -79,7 +81,7 @@ impl TryFrom<&[u8]> for Header {
 
         // ensure the first 4 bytes are "HEAD"
         let sign = &data[0..4];
-        if sign != "HEAD".as_bytes() {
+        if sign != MAGIC {
             return Err(WalError::DeserializationError(
                 "Invalid header signature".to_string(),
             ));

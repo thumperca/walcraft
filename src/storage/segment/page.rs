@@ -21,6 +21,8 @@ pub(crate) struct Page {
 }
 
 impl Page {
+    const MAGIC: &'static [u8; 4] = b"PAGE";
+
     /// Create a new empty page
     pub fn new(id: u32, size: usize) -> Self {
         assert_ne!(id, 0);
@@ -57,9 +59,11 @@ impl Page {
 
     /// Add a new item to the page
     pub fn add(&mut self, data: &[u8]) -> bool {
+        // check if there is enough space
         if self.data.len() + data.len() > self.size_data() {
             return false;
         }
+        // add the data
         self.data.extend_from_slice(data);
         self.is_dirty = true;
         true
@@ -96,7 +100,7 @@ impl Page {
         let mut bytes = Vec::with_capacity(self.max_size);
         let mut data = vec![0u8; self.size_data()];
         data[..self.data.len()].copy_from_slice(&self.data);
-        bytes.extend_from_slice(b"PAGE");
+        bytes.extend_from_slice(Self::MAGIC);
         bytes.extend_from_slice(&self.id.to_le_bytes());
         bytes.extend_from_slice(&data);
         bytes.extend_from_slice(&self.checksum.to_le_bytes());
@@ -119,7 +123,7 @@ impl TryFrom<&[u8]> for Page {
 
         // ensure the first 4 bytes are "PAGE"
         let sign = &data[0..4];
-        if sign != b"PAGE" {
+        if sign != Self::MAGIC {
             return Err(WalError::DeserializationError(
                 "Invalid page signature".to_string(),
             ));
