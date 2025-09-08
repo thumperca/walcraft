@@ -313,6 +313,44 @@ mod tests {
         );
     }
 
+    // Test garbage collection with 40 MiB limit
+    #[test]
+    fn garbage_collection_large() {
+        clean_test_dir();
+        let config = WalConfig {
+            location: PathBuf::from(TESTING_DIR),
+            size: 1024 * 1024 * 40, // 40 MiB
+            fsync: false,
+            page_size: 4096, // 4 KiB
+            sync_interval: 100,
+        };
+        let mut storage = Storage::new(config).unwrap();
+        // write a lot of data
+        for i in 0..2_200_000 {
+            let data = format!("Hello, world! {:06}", i); // 20 bytes
+            storage.append(data.as_bytes()).unwrap();
+        }
+        storage.flush(false).unwrap();
+        // test that older files & records were GCed
+        drop(storage);
+        let meta = Meta::read_from_file(TESTING_DIR).unwrap();
+        dbg!(&meta);
+        let total_size: usize = meta.segments.iter().map(|s| s.file_size).sum();
+        assert!(meta.segments.front().unwrap().file_id > 2);
+        assert!(meta.segments.front().unwrap().file_id < 10);
+        let size_mb = total_size / (1024 * 1024);
+        assert!(
+            size_mb <= 40,
+            "total size is {} KiB, expected <= 40 MiB",
+            size_mb
+        );
+        assert!(
+            size_mb >= 38,
+            "total size is {} KiB, expected > 38 MiB",
+            size_mb
+        );
+    }
+
     fn setup_data(config: &WalConfig, pointer: u32) {
         // create a metadata file
         let mut meta = Meta {
