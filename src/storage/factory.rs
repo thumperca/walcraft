@@ -159,21 +159,3 @@ impl StorageFactory {
         true
     }
 }
-
-// todo: empty test cases
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn new() {}
-
-    #[test]
-    fn changed_page_size() {}
-
-    #[test]
-    fn missing_file() {}
-
-    #[test]
-    fn missing_current_file() {}
-}
