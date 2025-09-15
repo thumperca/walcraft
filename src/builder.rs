@@ -143,11 +143,10 @@ mod tests {
 
     #[test]
     fn read_after_write() {
-        let location = "./tmp/testing";
-        std::fs::remove_dir_all(location).ok();
+        std::fs::remove_dir_all(TESTING_DIR).ok();
 
         // write some data
-        let wal = WalBuilder::new().location(location).build().unwrap();
+        let wal = WalBuilder::new().location(TESTING_DIR).build().unwrap();
         wal.append_struct(Log { id: 1, value: 3.14 }).unwrap();
         wal.append_struct(Log { id: 2, value: 6.14 }).unwrap();
         wal.append_struct(Log { id: 3, value: 9.14 }).unwrap();
@@ -155,8 +154,59 @@ mod tests {
         drop(wal);
 
         // try reading data
-        let wal = WalBuilder::new().location(location).build().unwrap();
+        let wal = WalBuilder::new().location(TESTING_DIR).build().unwrap();
         let data = wal.iter().unwrap().collect::<Vec<_>>();
         assert_eq!(data.len(), 3);
+    }
+
+    #[test]
+    fn change_page_size() {
+        std::fs::remove_dir_all(TESTING_DIR).ok();
+
+        // write some data with 4 KB page size
+        let wal = WalBuilder::new()
+            .location(TESTING_DIR)
+            .page_size(Size::Kb(4))
+            .storage_size(Size::Mb(500))
+            .build()
+            .unwrap();
+        wal.append_struct(Log { id: 1, value: 3.14 }).unwrap();
+        wal.append_struct(Log { id: 2, value: 6.14 }).unwrap();
+        wal.append_struct(Log { id: 3, value: 9.14 }).unwrap();
+        wal.flush().unwrap();
+        drop(wal);
+
+        // write some data with 8 KB page size
+        let wal = WalBuilder::new()
+            .location(TESTING_DIR)
+            .page_size(Size::Kb(8))
+            .storage_size(Size::Mb(500))
+            .build()
+            .unwrap();
+        wal.append_struct(Log { id: 4, value: 4.14 }).unwrap();
+        wal.append_struct(Log { id: 5, value: 5.14 }).unwrap();
+        wal.flush().unwrap();
+        drop(wal);
+
+        // test that 2 WAL files were created
+        let path = PathBuf::from(TESTING_DIR).join("logs");
+        let mut entries: Vec<_> = std::fs::read_dir(path)
+            .unwrap()
+            .map(|res| res.unwrap().file_name().into_string().unwrap())
+            .filter(|name| name.starts_with("wal_") && name.ends_with(".bin"))
+            .collect();
+        entries.sort();
+        assert_eq!(
+            entries,
+            vec![
+                "wal_0000000001.bin".to_string(),
+                "wal_0000000002.bin".to_string()
+            ]
+        );
+
+        // test wal contents
+        let wal = WalBuilder::new().location(TESTING_DIR).build().unwrap();
+        let data = wal.iter().unwrap().collect::<Vec<_>>();
+        assert_eq!(data.len(), 5);
     }
 }
