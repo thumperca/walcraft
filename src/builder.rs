@@ -209,4 +209,39 @@ mod tests {
         let data = wal.iter().unwrap().collect::<Vec<_>>();
         assert_eq!(data.len(), 5);
     }
+
+    #[test]
+    fn file_continuation() {
+        std::fs::remove_dir_all(TESTING_DIR).ok();
+
+        // write some data
+        let wal = WalBuilder::new().location(TESTING_DIR).build().unwrap();
+        wal.append_struct(Log { id: 1, value: 3.14 }).unwrap();
+        wal.append_struct(Log { id: 2, value: 6.14 }).unwrap();
+        wal.append_struct(Log { id: 3, value: 9.14 }).unwrap();
+        wal.flush().unwrap();
+        drop(wal);
+
+        // write data again
+        let wal = WalBuilder::new().location(TESTING_DIR).build().unwrap();
+        wal.append_struct(Log { id: 4, value: 4.14 }).unwrap();
+        wal.append_struct(Log { id: 5, value: 5.14 }).unwrap();
+        wal.flush().unwrap();
+        drop(wal);
+
+        // test that only one file exists
+        let path = PathBuf::from(TESTING_DIR).join("logs");
+        let mut entries: Vec<_> = std::fs::read_dir(path)
+            .unwrap()
+            .map(|res| res.unwrap().file_name().into_string().unwrap())
+            .filter(|name| name.starts_with("wal_") && name.ends_with(".bin"))
+            .collect();
+        entries.sort();
+        assert_eq!(entries, vec!["wal_0000000001.bin".to_string(),]);
+
+        // try reading data
+        let wal = WalBuilder::new().location(TESTING_DIR).build().unwrap();
+        let data = wal.iter().unwrap().collect::<Vec<_>>();
+        assert_eq!(data.len(), 5);
+    }
 }
