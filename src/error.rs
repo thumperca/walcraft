@@ -26,6 +26,8 @@ pub enum WalError {
     SerializationError(String),
     /// Error while deserializing data in serde or bincode libraries
     DeserializationError(String),
+    /// Checksum mismatch detected when reading a page
+    ChecksumMismatch,
 }
 
 impl Display for WalError {
@@ -37,6 +39,7 @@ impl Display for WalError {
             WalError::LockError(msg) => write!(f, "Lock Error: {}", msg),
             WalError::SerializationError(msg) => write!(f, "Serialization Error: {}", msg),
             WalError::DeserializationError(msg) => write!(f, "Deserialization Error: {}", msg),
+            WalError::ChecksumMismatch => write!(f, "Checksum mismatch"),
         }
     }
 }

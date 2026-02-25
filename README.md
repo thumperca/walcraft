@@ -10,12 +10,13 @@ space.
 - Simple to use and customize
 - Configurable storage limit
 - Configurable page size
+- CRC 32 checksum for data integrity
 - fsync support
 - High write throughput
 - Built for concurrent and parallel environments
 - Prevents write amplification for high frequency writes
 - Automatically syncs logs with the disk (default: every 100ms)
-- Bring our own serialization format
+- Bring your own serialization format
 
 # Initialization
 
@@ -36,13 +37,12 @@ fn main() {
         .build()
         .unwrap();
 
-    // create a wal with 16 KB page size, enable fsync, use 250 MB of storage, disable autosync and enable checksum
+    // create a wal with 16 KB page size, enable fsync, use 250 MB of storage and disable autosync
     let wal2: Wal<String> = WalBuilder::new()
         .location("/tmp/logs/wal")
         .storage_size(Size::Mb(250))
         .page_size(Size::Mb(16))
         .sync_interval(0)
-        .enable_checksum()
         .enable_fsync()
         .build()
         .unwrap();

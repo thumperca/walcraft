@@ -57,6 +57,7 @@ mod tests {
     use super::*;
     use crate::tests::clean_test_dir;
     use crate::{PAGE_MULTIPLIER, TESTING_DIR};
+    use std::io::{Seek, SeekFrom, Write};
 
     #[test]
     fn it_works() {
@@ -78,5 +79,41 @@ mod tests {
         assert_eq!(iterator.len(), 2);
         assert_eq!(iterator.pop().unwrap(), b"World");
         assert_eq!(iterator.pop().unwrap(), b"Hello");
+    }
+
+    #[test]
+    fn corrupted_page_is_skipped() {
+        clean_test_dir();
+        // Write data across two pages: fill page 1, then write to page 2
+        let mut segment =
+            FileSegment::create_new(TESTING_DIR, 1, PAGE_MULTIPLIER, PAGE_MULTIPLIER * 100)
+                .unwrap();
+        // Fill page 1 with a large entry
+        let large = vec![0xAB; PAGE_MULTIPLIER - 16];
+        assert!(segment.append(&large));
+        // Page 2 gets a small entry
+        assert!(segment.append(b"survivor"));
+        segment.flush(false).unwrap();
+        drop(segment);
+
+        // Corrupt page 1 on disk (byte inside the first page's payload area)
+        let path = FileSegment::get_path(TESTING_DIR, 1);
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .open(path.as_path())
+            .unwrap();
+        // Page 1 starts at offset PAGE_MULTIPLIER (after header); corrupt a payload byte
+        let corrupt_offset = PAGE_MULTIPLIER + 20;
+        file.seek(SeekFrom::Start(corrupt_offset as u64)).unwrap();
+        file.write_all(&[0xFF]).unwrap();
+        file.sync_all().unwrap();
+        drop(file);
+
+        // Re-open and iterate — page 1 should be skipped, page 2 should still read
+        let segment =
+            FileSegment::open_existing(path.to_str().unwrap(), PAGE_MULTIPLIER * 100).unwrap();
+        let entries: Vec<_> = PageIterator::new(segment).collect();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0], b"survivor");
     }
 }

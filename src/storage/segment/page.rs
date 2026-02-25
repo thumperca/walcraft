@@ -12,6 +12,7 @@ use crate::PAGE_MULTIPLIER;
 ///         The payload area is padded to ensure that the page is aligned to the page size.
 /// - **Checksum** (32-bit) - A checksum to ensure the integrity of the page.
 ///
+#[derive(Debug)]
 pub(crate) struct Page {
     pub id: u32,
     max_size: usize,
@@ -95,6 +96,11 @@ impl Page {
         d
     }
 
+    /// Utility method to compute checksum over a byte slice
+    fn compute_checksum(data: &[u8]) -> u32 {
+        crc32fast::hash(data)
+    }
+
     /// Convert the page to bytes array
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(self.max_size);
@@ -103,7 +109,9 @@ impl Page {
         bytes.extend_from_slice(Self::MAGIC);
         bytes.extend_from_slice(&self.id.to_le_bytes());
         bytes.extend_from_slice(&data);
-        bytes.extend_from_slice(&self.checksum.to_le_bytes());
+        // compute checksum over everything except the checksum field itself
+        let checksum = Self::compute_checksum(&bytes);
+        bytes.extend_from_slice(&checksum.to_le_bytes());
         assert_eq!(bytes.len(), self.max_size); // ensure the page is aligned to the page size
         assert_eq!(bytes.len() % 4096, 0); // ensure the page is aligned to 4 KiB
         bytes
@@ -129,9 +137,15 @@ impl TryFrom<&[u8]> for Page {
             ));
         }
 
+        // validate checksum
+        let stored_checksum = u32::from_le_bytes(data[data.len() - 4..].try_into().unwrap());
+        let computed_checksum = Self::compute_checksum(&data[..data.len() - 4]);
+        if stored_checksum != computed_checksum {
+            return Err(WalError::ChecksumMismatch);
+        }
+
         // read the data
         let id = u32::from_le_bytes(data[4..8].try_into().unwrap());
-        let checksum = u32::from_le_bytes(data[data.len() - 4..].try_into().unwrap());
         let size = data.len();
         let page_data = &data[8..size - 4];
 
@@ -140,7 +154,7 @@ impl TryFrom<&[u8]> for Page {
             max_size: size,
             is_dirty: false,
             data: page_data.to_vec(),
-            checksum,
+            checksum: stored_checksum,
         })
     }
 }
@@ -172,6 +186,10 @@ mod tests {
         let bytes = page.as_bytes();
         assert_eq!(bytes.len(), 4096);
 
+        // verify checksum is non-zero
+        let stored_checksum = u32::from_le_bytes(bytes[bytes.len() - 4..].try_into().unwrap());
+        assert_ne!(stored_checksum, 0);
+
         // convert bytes back to page
         let page = Page::try_from(&bytes[..]);
         assert!(page.is_ok());
@@ -179,5 +197,18 @@ mod tests {
         assert_eq!(page.id, 101);
         let data = &page.data[..msg.len()];
         assert_eq!(data, b"Hello World!");
+    }
+
+    #[test]
+    fn checksum_mismatch() {
+        let mut page = Page::new(1, 4096);
+        page.add(b"test data");
+        let mut bytes = page.as_bytes();
+
+        // corrupt a byte in the payload
+        bytes[10] ^= 0xFF;
+
+        let result = Page::try_from(&bytes[..]);
+        assert_eq!(result.unwrap_err(), WalError::ChecksumMismatch);
     }
 }
