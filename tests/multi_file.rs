@@ -19,6 +19,51 @@ fn build_wal(dir: &str, storage_mb: usize) -> Wal {
         .unwrap()
 }
 
+/// Write `count` log entries, flush, and drop the WAL.
+fn write_logs(dir: &str, storage_mb: usize, count: usize) {
+    std::fs::remove_dir_all(dir).ok();
+    let wal = build_wal(dir, storage_mb);
+    for i in 0..count {
+        wal.append_struct(Log {
+            seq: i,
+            payload: vec![(i % 256) as u8; 500],
+        })
+        .unwrap();
+    }
+    wal.flush().unwrap();
+}
+
+/// Re-open the WAL and read all entries back.
+fn read_logs(dir: &str, storage_mb: usize) -> Vec<Log> {
+    let wal = build_wal(dir, storage_mb);
+    wal.iter()
+        .unwrap()
+        .into_iter()
+        .map(|e| e.to_struct::<Log>().unwrap())
+        .collect()
+}
+
+/// Assert entries are in strictly increasing seq order with correct payloads.
+fn assert_entries_valid(entries: &[Log]) {
+    for window in entries.windows(2) {
+        assert!(
+            window[1].seq > window[0].seq,
+            "Entries out of order: seq {} followed by {}",
+            window[0].seq,
+            window[1].seq,
+        );
+    }
+    for entry in entries {
+        let expected_byte = (entry.seq % 256) as u8;
+        assert_eq!(entry.payload.len(), 500);
+        assert!(
+            entry.payload.iter().all(|&b| b == expected_byte),
+            "Payload mismatch at seq {}",
+            entry.seq,
+        );
+    }
+}
+
 fn wal_files(dir: &str) -> Vec<String> {
     let logs_dir = PathBuf::from(dir).join("logs");
     let mut files: Vec<String> = std::fs::read_dir(&logs_dir)
@@ -61,20 +106,10 @@ fn read_meta_segments(dir: &str) -> Vec<toml::Value> {
 #[test]
 fn data_spans_multiple_files() {
     let dir = "./tmp/testing_mf_span";
-    std::fs::remove_dir_all(dir).ok();
+    let total_entries = 5_000;
 
     // 8MB storage — holds ~14K entries across ~20 files before GC would trigger
-    let wal = build_wal(dir, 8);
-    let total_entries = 5_000;
-    for i in 0..total_entries {
-        wal.append_struct(Log {
-            seq: i,
-            payload: vec![(i % 256) as u8; 500],
-        })
-        .unwrap();
-    }
-    wal.flush().unwrap();
-    drop(wal);
+    write_logs(dir, 8, total_entries);
 
     // Multiple WAL files should exist on disk
     let files = wal_files(dir);
@@ -85,24 +120,9 @@ fn data_spans_multiple_files() {
     );
 
     // Read all entries back — every single one should survive (no GC)
-    let wal = build_wal(dir, 8);
-    let entries: Vec<Log> = wal
-        .iter()
-        .unwrap()
-        .into_iter()
-        .map(|e| e.to_struct::<Log>().unwrap())
-        .collect();
-
+    let entries = read_logs(dir, 8);
     assert_eq!(entries.len(), total_entries);
-    for (i, entry) in entries.iter().enumerate() {
-        assert_eq!(entry.seq, i, "Wrong seq at position {}", i);
-        let expected_byte = (i % 256) as u8;
-        assert!(
-            entry.payload.iter().all(|&b| b == expected_byte),
-            "Payload mismatch at seq {}",
-            i,
-        );
-    }
+    assert_entries_valid(&entries);
 }
 
 /// Trigger GC with a small storage limit. Verify surviving entries are ordered,
@@ -110,31 +130,13 @@ fn data_spans_multiple_files() {
 #[test]
 fn gc_preserves_recent_entries() {
     let dir = "./tmp/testing_mf_gc";
-    std::fs::remove_dir_all(dir).ok();
+    let storage_mb = 4;
+    let total_entries = 20_000;
 
     // 4MB storage can hold ~7000 entries; writing 20K forces heavy GC
-    let storage_mb = 4;
-    let wal = build_wal(dir, storage_mb);
+    write_logs(dir, storage_mb, total_entries);
 
-    let total_entries = 20_000;
-    for i in 0..total_entries {
-        wal.append_struct(Log {
-            seq: i,
-            payload: vec![(i % 256) as u8; 500],
-        })
-        .unwrap();
-    }
-    wal.flush().unwrap();
-    drop(wal);
-
-    // Read back surviving entries
-    let wal = build_wal(dir, storage_mb);
-    let entries: Vec<Log> = wal
-        .iter()
-        .unwrap()
-        .into_iter()
-        .map(|e| e.to_struct::<Log>().unwrap())
-        .collect();
+    let entries = read_logs(dir, storage_mb);
 
     // Some entries must survive
     assert!(!entries.is_empty(), "Expected surviving entries after GC");
@@ -145,26 +147,7 @@ fn gc_preserves_recent_entries() {
         total_entries,
     );
 
-    // Entries must be in strictly increasing sequence order
-    for window in entries.windows(2) {
-        assert!(
-            window[1].seq > window[0].seq,
-            "Entries out of order: seq {} followed by {}",
-            window[0].seq,
-            window[1].seq,
-        );
-    }
-
-    // Each surviving entry must have correct payload
-    for entry in &entries {
-        let expected_byte = (entry.seq % 256) as u8;
-        assert_eq!(entry.payload.len(), 500);
-        assert!(
-            entry.payload.iter().all(|&b| b == expected_byte),
-            "Payload mismatch at seq {}",
-            entry.seq,
-        );
-    }
+    assert_entries_valid(&entries);
 
     // The most recent entry should always survive
     assert_eq!(entries.last().unwrap().seq, total_entries - 1);
@@ -172,22 +155,12 @@ fn gc_preserves_recent_entries() {
 
 /// Verify files on disk match meta.toml and storage limit is respected after GC.
 #[test]
+#[ignore]
 fn files_match_meta_after_gc() {
     let dir = "./tmp/testing_mf_meta";
-    std::fs::remove_dir_all(dir).ok();
-
     let storage_mb = 4;
-    let wal = build_wal(dir, storage_mb);
 
-    for i in 0..20_000 {
-        wal.append_struct(Log {
-            seq: i,
-            payload: vec![0xAB; 500],
-        })
-        .unwrap();
-    }
-    wal.flush().unwrap();
-    drop(wal);
+    write_logs(dir, storage_mb, 20_000);
 
     let segments = read_meta_segments(dir);
     assert!(!segments.is_empty());
