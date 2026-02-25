@@ -26,20 +26,21 @@ impl BackgroundSync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{clean_test_dir, TESTING_DIR};
     use crate::Wal;
+
+    const BG_TEST_DIR: &str = "./tmp/testing_bg";
 
     #[test]
     fn it_works() {
-        clean_test_dir();
+        let _ = std::fs::remove_dir_all(BG_TEST_DIR);
         // write data in background
-        let wal = Wal::new(TESTING_DIR, Some(100)).unwrap();
+        let wal = Wal::new(BG_TEST_DIR, Some(100)).unwrap();
         wal.append(b"Hello").unwrap();
         wal.append(b"Hola").unwrap();
         BackgroundSync::new(wal).run(10);
         // read data
         std::thread::sleep(std::time::Duration::from_millis(20));
-        let wal = Wal::new(TESTING_DIR, Some(100)).unwrap();
+        let wal = Wal::new(BG_TEST_DIR, Some(100)).unwrap();
         let data = wal.iter().unwrap().collect::<Vec<_>>();
         assert_eq!(data.len(), 2);
         assert_eq!(data[0].data(), b"Hello");

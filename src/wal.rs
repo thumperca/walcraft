@@ -290,6 +290,7 @@ mod tests {
 
     #[test]
     fn extra_large_payload() {
+        clean_test_dir();
         let wal = Wal::new(TESTING_DIR, Some(500)).unwrap();
         let payload = vec![0; 4096 * 2]; // 8 KB
         let result = wal.append(&payload);

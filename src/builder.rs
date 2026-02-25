@@ -126,6 +126,7 @@ impl WalBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::clean_test_dir;
     use crate::TESTING_DIR;
     use serde::{Deserialize, Serialize};
 
@@ -137,13 +138,14 @@ mod tests {
 
     #[test]
     fn it_works() {
+        clean_test_dir();
         let wal = WalBuilder::new().location(TESTING_DIR).build();
         assert!(wal.is_ok());
     }
 
     #[test]
     fn read_after_write() {
-        std::fs::remove_dir_all(TESTING_DIR).ok();
+        clean_test_dir();
 
         // write some data
         let wal = WalBuilder::new().location(TESTING_DIR).build().unwrap();
@@ -161,7 +163,7 @@ mod tests {
 
     #[test]
     fn change_page_size() {
-        std::fs::remove_dir_all(TESTING_DIR).ok();
+        clean_test_dir();
 
         // write some data with 4 KB page size
         let wal = WalBuilder::new()
@@ -212,7 +214,7 @@ mod tests {
 
     #[test]
     fn file_continuation() {
-        std::fs::remove_dir_all(TESTING_DIR).ok();
+        clean_test_dir();
 
         // write some data
         let wal = WalBuilder::new().location(TESTING_DIR).build().unwrap();
