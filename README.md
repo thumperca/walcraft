@@ -29,7 +29,7 @@ use walcraft::{Size, WalBuilder, Wal};
 
 fn main() {
     // create a wal with 4 KB page size, 10 GB storage and autosync every 50ms
-    let wal: Wal<String> = WalBuilder::new()
+    let wal: Wal = WalBuilder::new()
         .location("/tmp/logs/wal")
         .page_size(Size::Kb(4))
         .storage_size(Size::Gb(10))
@@ -38,7 +38,7 @@ fn main() {
         .unwrap();
 
     // create a wal with 16 KB page size, enable fsync, use 250 MB of storage and disable autosync
-    let wal2: Wal<String> = WalBuilder::new()
+    let wal2: Wal = WalBuilder::new()
         .location("/tmp/logs/wal")
         .storage_size(Size::Mb(250))
         .page_size(Size::Mb(16))
@@ -82,24 +82,27 @@ fn main() {
     let log = Log { id: 1, value: 5.6234 };
 
     // initiate wal and add a log
-    let wal = Wal::new("./tmp/", None);
-    wal.write(log); // write a log
+    let wal = Wal::new("./tmp/", None).unwrap();
+    // write a struct
+    wal.append_struct(log).unwrap();
+    // write raw bytes
+    wal.append(b"raw binary data").unwrap();
 
     // write a log in another thread
     let wal2 = wal.clone();
     std::thread::spawn(move || {
         let log = Log { id: 2, value: 0.45 };
-        wal2.write(log);
+        wal2.append_struct(log).unwrap();
     });
 
     // keep writing logs in current thread
     let log = Log { id: 3, value: 123.59 };
-    wal.write(log);
+    wal.append_struct(log).unwrap();
 
     // Flush the logs to the disk manually
     // This happens automatically as well after some time. However, it's advised to
     // run this method before terminating the program to ensure that no logs are lost.
-    wal.flush();
+    wal.flush().unwrap();
 }
 ```
 
@@ -109,7 +112,7 @@ fn main() {
 use serde::{Deserialize, Serialize};
 use walcraft::Wal;
 
-// Log to write
+// Log to read
 #[derive(Serialize, Deserialize, Debug)]
 struct Log {
     id: usize,
@@ -117,12 +120,12 @@ struct Log {
 }
 
 fn main() {
-    let wal: Wal<Log> = Wal::new("./tmp/", None);
-    let iterator = wal.read().unwrap();
+    let wal = Wal::new("./tmp/", None).unwrap();
+    let iterator = wal.iter().unwrap();
 
     for entry in iterator {
         let raw_log = entry.data(); // read raw bytes
-        let log: Log = entry.to_struct().unwarp(); // convert raw bytes to struct
+        let log: Log = entry.to_struct().unwrap(); // convert raw bytes to struct
         println!("Log: {:?}", log);
     }
 }
@@ -169,12 +172,16 @@ All data is now handled strictly as binary blobs (&[u8]). Both the append and re
 This change helps streamline performance and reduce dependency overhead. It reduces the tight coupling with the serde
 library and offers more flexibility in how data is serialized and deserialized.
 
+**Mandatory CRC32 Checksums**
+
+Every page now includes a CRC32 checksum that is computed on write and validated on read. Pages that fail
+validation are automatically skipped during iteration. This is always enabled and cannot be turned off.
+
 **Convenient Struct Interface**
 
-A new convenience method `append_struct<T: Serialize>(item: T)` is offered (behind `struct` feature flag) to serialize
-your structs automatically. On reading, the library will return a `LogEntry` object, which can be converted to struct
-using `to_struct<T: Deserialize>()`. Alternatively, you can use the `data()` method to get the underlying binary
-data.
+A convenience method `append_struct<T: Serialize>(item: T)` is provided to serialize your structs automatically.
+On reading, the library returns a `LogEntry` object, which can be converted to a struct using
+`to_struct::<T: Deserialize>()`. Alternatively, you can use the `data()` method to get the underlying binary data.
 
 # Useful tips
 
@@ -249,22 +256,20 @@ fn main() {
 
 The WAL can only be in read mode or write mode, not both at the same time.
 
-- **Ideal**: When created, the WAL is in an idle mode.
-- **Read**: Calling `.read()` method switches the WAL to read mode. In this mode, you cannot write data;
-  any write attempts will be ignored. Once the reading finishes, the WAL automatically reverts to ideal mode.
-- **Write**: When you start writing to the WAL, it switches to write mode and cannot switch back to ideal or read mode.
+- **Idle**: When created, the WAL is in an idle mode.
+- **Read**: Calling `.iter()` method switches the WAL to read mode. In this mode, you cannot write data;
+  any write attempts will be ignored. Once the reading finishes, the WAL automatically reverts to idle mode.
+- **Write**: When you start writing to the WAL, it switches to write mode and cannot switch back to idle or read mode.
 
 This design prevents conflicts between reading and writing. Ideally, you should read the data at startup, as part of the
 recovery process, before beginning to write.
-
-**Note:** This behavior will be fixed in a future update.
 
 ```rust
 use serde::{Deserialize, Serialize};
 use walcraft::Wal;
 
 // Log to write
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 struct Log {
     id: usize,
     value: f64
@@ -272,31 +277,28 @@ struct Log {
 
 fn main() {
     // create an instance of WAL
-    let wal = Wal::new("/tmp/logz", Some(2000));
+    let wal = Wal::new("/tmp/logz", Some(2000)).unwrap();
 
     // recovery: Option A (read all data at once)
-    // This method reads all the data at once and shall only be used 
+    // This method reads all the data at once and shall only be used
     // if all the logs, depending on storage size, can fit in the memory
-    let all_logs = wal.read().unwrap().into_iter().collect::<Vec<Log>>();
+    let all_logs = wal.iter().unwrap().collect::<Vec<_>>();
 
     // recovery: Option B
-    // This method reads data in chunks of page size (default: 4 KB). 
+    // This method reads data in chunks of page size (default: 4 KB).
     // It is memory efficient and ideal when you have a large number of logs
-    for log in wal.read().unwrap() {
-        // do something with logs 
+    for entry in wal.iter().unwrap() {
+        let log: Log = entry.to_struct().unwrap();
         dbg!(log);
     }
 
     // start writing
-    wal.write(Log { id: 1, value: 3.14 });
+    wal.append_struct(Log { id: 1, value: 3.14 }).unwrap();
+    wal.append(b"raw binary data").unwrap();
 }
 
 ```
 
 # Known issues
 
-- **Enum support**: Using enum in the log struct is not supported.
-  The library uses `serde` and `bincode` to serialize and deserialize the logs.
-  Enums are not guaranteed to be serialized and deserialized correctly.
-  A workaround this limitation is to convert the enum field to string with serde_json
-  and store it as string in logs struct.
+- None at the moment.
